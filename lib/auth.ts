@@ -1,64 +1,57 @@
-import NextAuth from 'next-auth';
-import EmailProvider from 'next-auth/providers/email';
-import { PrismaAdapter } from '@auth/prisma-adapter';
-import type { Adapter, AdapterUser } from '@auth/core/adapters';
 import { db } from '@/lib/db';
 import type { Role } from '@prisma/client';
 
-// Wrap PrismaAdapter to handle required tenantId on createUser.
-// When NextAuth creates a new user via magic-link, we assign them to the
-// mock tenant so the DB constraint is satisfied.
-const FALLBACK_TENANT_ID = 'mock-plas-tanks';
+const DEV_TENANT_ID = 'mock-plas-tanks';
+const DEV_USER_EMAIL = 'dev@frp-tank-quoter.local';
 
-function buildAdapter(): Adapter {
-  const base = PrismaAdapter(db) as Adapter;
+async function ensureDevUser() {
+  const existing = await db.user.findUnique({ where: { email: DEV_USER_EMAIL } });
+  if (existing) return existing;
+
+  await db.tenant.upsert({
+    where: { id: DEV_TENANT_ID },
+    update: {},
+    create: { id: DEV_TENANT_ID, name: 'Plas-Tanks Industries (mock)' },
+  });
+  try {
+    return await db.user.create({
+      data: {
+        email: DEV_USER_EMAIL,
+        name: 'Dev Admin',
+        role: 'ADMIN',
+        tenantId: DEV_TENANT_ID,
+      },
+    });
+  } catch {
+    return db.user.findUniqueOrThrow({ where: { email: DEV_USER_EMAIL } });
+  }
+}
+
+export async function auth() {
+  const user = await ensureDevUser();
   return {
-    ...base,
-    // Override createUser to inject the fallback tenantId required by our schema.
-    // NextAuth's default adapter passes only the Auth.js AdapterUser fields (no tenantId).
-    createUser: async (user: AdapterUser): Promise<AdapterUser> => {
-      // Ensure the fallback tenant exists before creating the user
-      await db.tenant.upsert({
-        where: { id: FALLBACK_TENANT_ID },
-        update: {},
-        create: { id: FALLBACK_TENANT_ID, name: 'Plas-Tanks Industries (mock)' },
-      });
-      const created = await db.user.create({
-        data: {
-          email: user.email,
-          name: user.name,
-          tenantId: (user as AdapterUser & { tenantId?: string }).tenantId ?? FALLBACK_TENANT_ID,
-        },
-      });
-      return { ...created, emailVerified: null } as AdapterUser;
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      tenantId: user.tenantId,
     },
   };
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: buildAdapter(),
-  providers: process.env.EMAIL_SERVER
-    ? [
-        EmailProvider({
-          server: process.env.EMAIL_SERVER,
-          from: process.env.EMAIL_FROM ?? 'noreply@example.com',
-        }),
-      ]
-    : [],
-  pages: { signIn: '/sign-in' },
-  callbacks: {
-    session: async ({ session, user }) => {
-      if (session.user) {
-        const dbUser = await db.user.findUnique({ where: { id: user.id } });
-        (session.user as any).id = user.id;
-        (session.user as any).role = dbUser?.role ?? 'SALES';
-        (session.user as any).tenantId = dbUser?.tenantId;
-      }
-      return session;
-    },
-  },
-  session: { strategy: 'database' },
-});
+export const signIn = async () => {
+  /* no-op — auth is stubbed */
+};
+
+export const signOut = async () => {
+  /* no-op — auth is stubbed */
+};
+
+export const handlers = {
+  GET: () => new Response('Auth disabled', { status: 501 }),
+  POST: () => new Response('Auth disabled', { status: 501 }),
+};
 
 export type SessionUser = {
   id: string;

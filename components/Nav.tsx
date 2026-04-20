@@ -1,6 +1,4 @@
-'use client';
 import Link from 'next/link';
-import { signOut } from 'next-auth/react';
 
 export function Nav({ userEmail }: { userEmail: string }) {
   return (
@@ -12,9 +10,6 @@ export function Nav({ userEmail }: { userEmail: string }) {
       </div>
       <div className="flex items-center gap-3">
         <span className="text-sm text-gray-600">{userEmail}</span>
-        <button onClick={() => signOut()} className="text-sm text-gray-700 underline">
-          Sign out
-        </button>
       </div>
     </nav>
   );
