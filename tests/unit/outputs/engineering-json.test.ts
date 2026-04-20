@@ -23,7 +23,7 @@ describe('buildEngineeringJson', () => {
     expect(json.customer.name).toBe('Acme');
     expect(json.service.chemical).toBe('H2SO4');
     expect(json.site.seismic.Ss).toBe(1.2);
-    expect(json.certifications.asme_rtp1.class).toBe('II');
+    expect(json.certifications.asme_rtp1?.class).toBe('II');
     expect(json.geometry.id_in).toBe(120);
     expect(json.wall_buildup.corrosion_barrier.resin).toBe('derakane-411-350');
     expect(json.rules_engine_version).toBe('0.1.0');
