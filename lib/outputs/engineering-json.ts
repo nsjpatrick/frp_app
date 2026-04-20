@@ -28,6 +28,7 @@ export function buildEngineeringJson(
       certs: any;
       geometry: any;
       wallBuildup: any;
+      outputs?: any;
     };
   },
   opts: EngineeringJsonOpts,
@@ -105,7 +106,7 @@ export function buildEngineeringJson(
       },
     },
 
-    structural_analysis: null,
+    structural_analysis: rev.outputs?.structuralAnalysis ?? null,
     nozzles: [],
     accessories: [],
     anchorage: null,

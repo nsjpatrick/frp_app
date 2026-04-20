@@ -35,4 +35,29 @@ describe('buildEngineeringJson', () => {
     const b = buildEngineeringJson(fixture as any, { rulesEngineVersion: '0.1.0', catalogSnapshotId: 'seed-v0', generatedAt: '2026-04-20T12:00:00Z' });
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
+
+  it('includes structural_analysis when revision has outputs.structuralAnalysis', () => {
+    const withAnalysis = {
+      ...fixture,
+      revision: {
+        ...fixture.revision,
+        outputs: {
+          structuralAnalysis: {
+            wallThickness: { shellThicknessIn: 0.3, headThicknessIn: 0.345, governingRule: 'hoop_pressure', engineVersion: 'wall-thickness-v1', citations: [] },
+            wind: { qzPsf: 25, Cf: 0.7, baseShearLbf: 1000, overturningMomentLbfIn: 100_000, projectedAreaFt2: 120, meanHeightFt: 6, engineVersion: 'wind-v1', citations: [] },
+            seismic: { SDS: 0.8, SD1: 0.5, Ai: 0.53, Ac: 0.2, Wi_lb: 40_000, Wc_lb: 5000, Hi_in: 54, Hc_in: 70, baseShearLbf: 21_500, overturningMomentLbfIn: 1_200_000, requiredFreeboardIn: 10, engineVersion: 'seismic-v1', citations: [] },
+            loadCombination: { governingCase: '0.9D+1.0E', governingUpliftLbf: 18_000, governingLateralLbf: 21_500, governingOverturningLbfIn: 1_200_000, engineVersion: 'load-combinations-v1' },
+            anchor: { anchorDetailId: 'ss316-3-4', qty: 8, requiredCapacityLbf: 45_000, selectedCapacityLbfEach: 4200, pitch: 'acceptable', engineVersion: 'anchor-sizing-v1' },
+            preliminary: true,
+            reviewRequired: true,
+            engineVersion: '0.2.0-rules-depth',
+          },
+        },
+      },
+    };
+    const json = buildEngineeringJson(withAnalysis as any, { rulesEngineVersion: '0.2.0', catalogSnapshotId: 'seed-v0' });
+    expect(json.structural_analysis).not.toBeNull();
+    expect(json.structural_analysis.loadCombination.governingCase).toBe('0.9D+1.0E');
+    expect(json.structural_analysis.anchor.qty).toBe(8);
+  });
 });
