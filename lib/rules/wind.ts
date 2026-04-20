@@ -1,8 +1,13 @@
 /**
  * Wind analysis for vertical cylindrical tanks per ASCE 7-22.
  *
- * Velocity pressure (§26.10):
- *   q_z = 0.00256 × K_z × K_zt × K_d × V² × I_w    (psf)
+ * Velocity pressure (§26.10.1 Eq. 26.10-1):
+ *   q_z = 0.00256 × K_z × K_zt × K_d × V²    (psf)
+ *
+ * Note: ASCE 7-16 removed the importance factor I_w from the velocity pressure
+ * equation. Risk-category differentiation is now carried by the basic wind
+ * speeds V published on the ASCE Hazard Tool (different V for Risk I/II/III/IV
+ * at the same site). Callers pass risk-adjusted V; we do NOT multiply again.
  *
  * Force coefficient for round structures (§29.4 + Table 29.4-1):
  *   Cf ≈ 0.5 for D/√(q_z·h) > 2.5
@@ -10,7 +15,7 @@
  */
 
 import type { WindAnalysisResult, VesselGeometryInput, WindSiteInput } from './types';
-import { WIND_DIRECTIONALITY_Kd_ROUND_TANK, IMPORTANCE_FACTOR, IN_PER_FT } from './constants';
+import { WIND_DIRECTIONALITY_Kd_ROUND_TANK, IN_PER_FT } from './constants';
 
 type Exposure = 'B' | 'C' | 'D';
 
@@ -41,10 +46,14 @@ export function velocityPressureQz(args: {
   riskCategory: 'I' | 'II' | 'III' | 'IV';
   heightFt: number;
 }): number {
+  // ASCE 7-22 Eq. 26.10-1: qz = 0.00256·Kz·Kzt·Kd·V²
+  // Importance factor was removed from qz in ASCE 7-16; it is now baked into the
+  // risk-category-specific basic wind speeds V published on the ASCE Hazard Tool.
+  // riskCategory is still carried through for callers that may want it for combinations.
+  void args.riskCategory;
   const Kz = lookupKz(args.exposure, args.heightFt);
-  const Iw = IMPORTANCE_FACTOR[args.riskCategory].Iw;
   const Kd = WIND_DIRECTIONALITY_Kd_ROUND_TANK;
-  return 0.00256 * Kz * args.Kzt * Kd * args.V ** 2 * Iw;
+  return 0.00256 * Kz * args.Kzt * Kd * args.V ** 2;
 }
 
 export function computeWindAnalysis(input: {

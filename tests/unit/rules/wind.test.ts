@@ -3,6 +3,7 @@ import { computeWindAnalysis, velocityPressureQz } from '@/lib/rules/wind';
 
 describe('velocityPressureQz — ASCE 7-22 §26.10', () => {
   it('computes qh for 10ft tall tank, Exposure C, V=115', () => {
+    // Per ASCE 7-22 Eq. 26.10-1 (no Iw): qz = 0.00256 × 0.85 × 1.0 × 0.95 × 115² = 27.3 psf
     const q = velocityPressureQz({
       V: 115,
       exposure: 'C',
@@ -19,10 +20,12 @@ describe('velocityPressureQz — ASCE 7-22 §26.10', () => {
     expect(q180 / q90).toBeCloseTo(4, 1);
   });
 
-  it('increases with importance factor for Risk Category IV', () => {
+  it('does NOT apply Iw — risk category carried only by input V per ASCE 7-16/22', () => {
+    // qz itself does not change with riskCategory at the same V. Callers must pass a
+    // risk-adjusted V from the ASCE Hazard Tool (different V mapped per Risk I/II/III/IV).
     const q2 = velocityPressureQz({ V: 115, exposure: 'C', Kzt: 1.0, riskCategory: 'II', heightFt: 10 });
     const q4 = velocityPressureQz({ V: 115, exposure: 'C', Kzt: 1.0, riskCategory: 'IV', heightFt: 10 });
-    expect(q4 / q2).toBeCloseTo(1.15, 2);
+    expect(q4).toBeCloseTo(q2, 5);
   });
 });
 

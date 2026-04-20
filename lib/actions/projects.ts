@@ -23,6 +23,9 @@ export async function createProject(formData: FormData) {
     needByDate: formData.get('needByDate') || undefined,
   });
 
+  const customer = await db.customer.findUnique({ where: { id: parsed.customerId } });
+  if (!customer || customer.tenantId !== user.tenantId) throw new Error('customer not found');
+
   const project = await db.project.create({
     data: {
       ...parsed,
