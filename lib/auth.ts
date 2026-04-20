@@ -37,12 +37,14 @@ function buildAdapter(): Adapter {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: buildAdapter(),
-  providers: [
-    EmailProvider({
-      server: process.env.EMAIL_SERVER!,
-      from: process.env.EMAIL_FROM!,
-    }),
-  ],
+  providers: process.env.EMAIL_SERVER
+    ? [
+        EmailProvider({
+          server: process.env.EMAIL_SERVER,
+          from: process.env.EMAIL_FROM ?? 'noreply@example.com',
+        }),
+      ]
+    : [],
   pages: { signIn: '/sign-in' },
   callbacks: {
     session: async ({ session, user }) => {
