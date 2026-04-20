@@ -20,7 +20,7 @@ A web application that enables a sales representative at a fiberglass reinforced
 - Single-tenant deployment (mock Plas-Tanks as the reference fabricator)
 - Quote lifecycle: draft → sent → won / lost, with versioned revisions
 - Configurator wizard (7 steps) with live quote summary
-- Rules engine: resin compatibility, wall buildup per ASTM D3299 / D4097 / RTP-1, ASCE 7 seismic + wind, anchor sizing
+- Rules engine: resin compatibility, wall buildup per ASTM D3299 / D4097 / RTP-1, ASCE 7 seismic + wind, anchor sizing, certification-driven filtering (ASME RTP-1 class, ANSI standards, NSF/ANSI 61 & 2)
 - Pricing engine: materials, labor, overhead, margin, with catalog version snapshotting
 - Catalog management: resins, reinforcements, nozzles, accessories, labor standards, anchor details
 - Price-feed subsystem: monthly cron pulling supplier price updates via pluggable adapters (email, CSV/XLSX, index-based, API), staged for admin approval
@@ -103,6 +103,14 @@ Tenant (single row in V1; schema ready for V2 multi-tenant)
                           │     └── WindParameters (V, exposure, Kzt, risk_category)
                           ├── Geometry (orientation, id_in, ss_height_in, top_head, bottom, freeboard_in)
                           ├── DesignCode (governing_std, inspection_requirements, hydro_test)
+                          ├── CertificationRequirements
+                          │     ├── asme_rtp1_class (none | I | II | III)
+                          │     ├── asme_rtp1_std_revision (e.g., "RTP-1:2019")
+                          │     ├── ansi_standards[] (code, revision, scope)  // e.g., AWWA D120, B16.5
+                          │     ├── nsf_ansi_61 (bool) + target_end_use_temp_F
+                          │     ├── nsf_ansi_2 (bool)
+                          │     ├── third_party_inspector (TUV | Lloyds | Intertek | none)
+                          │     └── required_documents[] (UDS, MDR, MTR, ITP, hydrotest_cert)
                           ├── WallBuildup
                           │     ├── CorrosionBarrier (veil, resin_rich_in, resin_id)
                           │     └── Structural (layer_sequence, total_thickness_in)
@@ -136,6 +144,9 @@ AuditLog (append-only; DB trigger prevents UPDATE/DELETE)
 Catalog (versioned; a Revision always references a specific catalog_version_id)
   ├── CatalogVersion (id, created_at, activated_at, notes)
   ├── Resin (name, supplier, family, max_service_temp_F, density_lb_ft3, price_per_lb, version_id)
+  │     └── certifications (nsf_ansi_61: {listed, max_temp_F, listing_ref},
+  │                         nsf_ansi_2: {listed, listing_ref},
+  │                         asme_rtp1_class_eligibility[])
   ├── Reinforcement (type: CSM | WR | veil, weight_oz_yd2, price_per_lb, version_id)
   ├── NozzleType (size_nps, rating, flange_std, face_type, unit_price, version_id)
   ├── Accessory (category, spec, unit_price, labor_hrs, version_id)
@@ -172,7 +183,7 @@ PriceUpdate (staged; admin-reviewed before applying)
 Seven-step flow with sticky left nav and right-rail live quote summary:
 
 1. **Customer & Project** — existing customer lookup or new; project name, site address, need-by date
-2. **Service Conditions** — chemicals, temps, SG, pressure/vacuum, site class, Ss/S1, wind V, exposure (site fields auto-populated from address via USGS + ASCE hazard tool lookups, user-overridable)
+2. **Service Conditions & Certifications** — chemicals, temps, SG, pressure/vacuum, site class, Ss/S1, wind V, exposure (site fields auto-populated from address via USGS + ASCE hazard tool lookups, user-overridable); multi-select flags for ASME RTP-1 (with class I/II/III), ANSI standards applicable (free-add with code + revision), NSF/ANSI 61, NSF/ANSI 2, and third-party inspector
 3. **Geometry & Orientation** — orientation, working volume, ID, SS height, head types, freeboard
 4. **Resin & Wall Buildup** — tool filters catalog resins to those compatible with Step 2 inputs; user picks; tool computes corrosion barrier + structural laminate thickness
 5. **Nozzle Schedule** — add/edit nozzles (tag, size, rating, flange std, face type, elevation, clock position); validation for spacing and ring-support intersection
@@ -200,7 +211,12 @@ Pure functions, no DB writes, fully unit-tested. Each rule references the standa
   - overturning moment integrated over height
 - **Combined load cases** — ASCE 7 combinations (0.6D + W, 0.9D + 1.0E, etc.); governing case drives anchor design
 - **Anchor sizing** — selects from AnchorDetail catalog meeting governing uplift with appropriate safety factor
-- **Flag generators** — exotic chemistry, oversize for shipping, design temp near resin HDT, vacuum without ring stiffeners, extreme L/D, etc.
+- **Certification filter** — narrows eligible resins further based on `CertificationRequirements`:
+  - if `nsf_ansi_61 = true`, only resins with `nsf_ansi_61.listed = true` AND `max_temp_F >= design_temp_F` survive
+  - if `nsf_ansi_2 = true`, only resins with `nsf_ansi_2.listed = true` survive
+  - if `asme_rtp1_class` set, resin must declare matching `asme_rtp1_class_eligibility`
+  - empty result set after filter → engineering-review flag with explanation of which constraint eliminated all candidates
+- **Flag generators** — exotic chemistry, oversize for shipping, design temp near resin HDT, vacuum without ring stiffeners, extreme L/D, missing certification-required documents, ASME RTP-1 class mismatch with vessel size, etc.
 
 Rules engine version is stamped on every Revision's output so a later re-run produces the same result or is explicitly detected as differing.
 
@@ -255,6 +271,16 @@ All three are stored in versioned S3 under `s3://bucket/tenant/{tenant_id}/quote
   "site": { /* seismic + wind */ },
   "geometry": { /* ... */ },
   "design_code": { /* ... */ },
+  "certifications": {
+    "asme_rtp1": { "class": "II", "std_revision": "RTP-1:2019" },
+    "ansi_standards": [
+      { "code": "AWWA D120", "revision": "2022", "scope": "flanged nozzles" }
+    ],
+    "nsf_ansi_61": { "required": true, "target_end_use_temp_F": 140 },
+    "nsf_ansi_2": { "required": false },
+    "third_party_inspector": "TUV",
+    "required_documents": ["UDS", "MDR", "MTR", "hydrotest_cert"]
+  },
   "wall_buildup": { /* corrosion barrier + structural */ },
   "structural_analysis": { /* governing case, all calcs */ },
   "nozzles": [ /* schedule */ ],
@@ -340,7 +366,7 @@ The original question asked what inputs the tool needs to capture:
 
 **Geometry** — orientation, working volume (tool back-computes dimensions or accepts them), inside diameter, straight-side height, top head type, bottom type, freeboard requirement.
 
-**Design Code & Certifications** — governing standard (ASTM D3299, D4097, RTP-1 Class), third-party inspection, buyer QA/QC requirements, hydrostatic test spec.
+**Design Code & Certifications** — governing standard (ASTM D3299, D4097, RTP-1 Class), ASME RTP-1 stamp class (I/II/III), ANSI standards applicable (code + revision, multi-select), NSF/ANSI 61 required (+ target end-use temp), NSF/ANSI 2 required, third-party inspector (TUV/Lloyd's/Intertek/none), required document deliverables (User's Design Spec, Manufacturer's Design Report, Material Test Reports, Inspection & Test Plan, hydrotest cert), hydrostatic test spec.
 
 **Resin & Wall Buildup** — resin family (suggested), specific resin product, corrosion barrier (veil + thickness), structural laminate spec, external UV gelcoat flag.
 
@@ -363,6 +389,14 @@ The original question asked what inputs the tool needs to capture:
 ## 16. Glossary
 
 - **FRP** — Fiberglass Reinforced Plastic
+- **NSF** — National Sanitation Foundation (NSF International); certifications jointly published with ANSI as NSF/ANSI standards
+- **NSF/ANSI 61** — Drinking Water System Components — Health Effects (restricts materials in potable water contact)
+- **NSF/ANSI 2** — Food Equipment materials standard
+- **ASME RTP-1** — Reinforced Thermoset Plastic Corrosion Resistant Equipment (design + fabrication + certification standard); class I/II/III relates to design rigor and inspection level
+- **UDS** — User's Design Specification (buyer-provided inputs per RTP-1)
+- **MDR** — Manufacturer's Design Report (fabricator's design calcs per RTP-1)
+- **MTR** — Material Test Report
+- **ITP** — Inspection & Test Plan
 - **RFI** — Request for Information (customer's initial inquiry)
 - **RTP-1** — ASME standard for reinforced thermoset plastic corrosion-resistant equipment
 - **ASTM D3299** — Standard for filament-wound FRP corrosion-resistant tanks
