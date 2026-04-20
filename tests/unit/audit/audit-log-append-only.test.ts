@@ -1,15 +1,8 @@
 import 'dotenv/config';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { PrismaClient } from '../../../generated/client/client';
-import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '@prisma/client';
 
-function createClient() {
-  const connectionString = process.env.DATABASE_URL!;
-  const adapter = new PrismaPg({ connectionString });
-  return new PrismaClient({ adapter });
-}
-
-const db = createClient();
+const db = new PrismaClient();
 
 describe('AuditLog append-only', () => {
   let created: { id: string };
