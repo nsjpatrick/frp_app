@@ -95,3 +95,6 @@ export const CHEMICAL_FAMILIES = [
 ] as const;
 
 export type ChemicalFamily = typeof CHEMICAL_FAMILIES[number];
+
+export { SEED_ANCHORS } from './anchor';
+export type { AnchorDetail } from './anchor';
