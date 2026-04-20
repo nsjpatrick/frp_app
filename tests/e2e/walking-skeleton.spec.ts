@@ -56,6 +56,14 @@ test('sales rep creates customer → project → quote → fills wizard → down
   await expect(page.locator('pre')).toContainText('"schema_version": "1.0.0"');
   await expect(page.locator('pre')).toContainText('"chemical": "H2SO4"');
 
+  // Engineering-review banner is visible
+  await expect(page.locator('text=Preliminary — Engineering Review Required')).toBeVisible();
+
+  // Structural analysis section populated
+  await expect(page.locator('text=Structural Analysis (preliminary)')).toBeVisible();
+  await expect(page.locator('text=Governing case')).toBeVisible();
+  await expect(page.locator('div:has-text("Anchor:")').first()).toBeVisible();
+
   // JSON endpoint
   const jsonUrl = page.url().replace('/review', '/engineering.json');
   const res = await page.request.get(jsonUrl);
@@ -65,4 +73,7 @@ test('sales rep creates customer → project → quote → fills wizard → down
   expect(json.service.chemical).toBe('H2SO4');
   expect(json.certifications.asme_rtp1.class).toBe('II');
   expect(json.wall_buildup.corrosion_barrier.resin).toBeTruthy();
+  expect(json.structural_analysis).not.toBeNull();
+  expect(json.structural_analysis.wallThickness.shellThicknessIn).toBeGreaterThan(0);
+  expect(['0.6D+W', '0.9D+1.0E']).toContain(json.structural_analysis.loadCombination.governingCase);
 });
