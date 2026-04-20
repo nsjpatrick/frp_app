@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { WizardShell } from '@/components/wizard/WizardShell';
 import { saveServiceStep } from '@/lib/actions/revisions';
 import { CHEMICAL_FAMILIES } from '@/lib/catalog/seed-data';
+import { SiteLookupSection } from '@/components/wizard/SiteLookupSection';
 
 export default async function Step2({ params }: { params: Promise<{ quoteId: string; revLabel: string }> }) {
   const { quoteId, revLabel } = await params;
@@ -109,11 +110,10 @@ export default async function Step2({ params }: { params: Promise<{ quoteId: str
           <input type="hidden" name="requiredDocuments" defaultValue={JSON.stringify(c.requiredDocuments ?? [])} />
         </section>
 
-        <section>
-          <h3 className="font-semibold mb-2">Site & Environmental (pre-filled defaults; ASCE 7 auto-lookup in Plan 2)</h3>
-          <input type="hidden" name="siteJson" defaultValue={JSON.stringify(site)} />
-          <p className="text-xs text-gray-500">Seismic: Site Class D, Ss=1.0, S1=0.35. Wind: V=115 mph, Exposure C. Edit in Plan 2.</p>
-        </section>
+        <SiteLookupSection
+          initial={site}
+          siteAddress={rev.quote.project.siteAddress ?? ''}
+        />
 
         <div className="text-right">
           <button className="rounded bg-blue-600 text-white px-4 py-2 text-sm">Save and continue →</button>
