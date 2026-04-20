@@ -32,6 +32,10 @@ export default async function Review({ params }: { params: Promise<{ quoteId: st
         </a>
       </div>
 
+      <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm mb-4">
+        <strong>Preliminary — Engineering Review Required.</strong> Structural calculations are produced by the tool&apos;s rules engine per ASCE 7-22, ASTM D3299/D4097, and RTP-1. A licensed PE must review before release for fabrication.
+      </div>
+
       <div className="space-y-4 text-sm">
         <section>
           <h3 className="font-semibold">Customer / Project</h3>
@@ -70,6 +74,19 @@ export default async function Review({ params }: { params: Promise<{ quoteId: st
           <h3 className="font-semibold">Resin</h3>
           <div className="text-gray-700">{json.wall_buildup.corrosion_barrier.resin ?? 'None selected'}</div>
         </section>
+
+        {json.structural_analysis && (
+          <section>
+            <h3 className="font-semibold">Structural Analysis (preliminary)</h3>
+            <div className="text-gray-700 space-y-1 text-sm">
+              <div>Wall: shell {json.structural_analysis.wallThickness.shellThicknessIn}&quot; · head {json.structural_analysis.wallThickness.headThicknessIn}&quot; · governed by {json.structural_analysis.wallThickness.governingRule}</div>
+              <div>Wind base shear: {json.structural_analysis.wind.baseShearLbf.toLocaleString()} lbf · Seismic base shear: {json.structural_analysis.seismic.baseShearLbf.toLocaleString()} lbf</div>
+              <div>Governing case: <strong>{json.structural_analysis.loadCombination.governingCase}</strong> · uplift {json.structural_analysis.loadCombination.governingUpliftLbf.toLocaleString()} lbf</div>
+              <div>Anchor: {json.structural_analysis.anchor.qty} × {json.structural_analysis.anchor.anchorDetailId} (capacity {json.structural_analysis.anchor.selectedCapacityLbfEach.toLocaleString()} lbf each)</div>
+              <div>Required freeboard (slosh): {json.structural_analysis.seismic.requiredFreeboardIn}&quot; · provided: {json.geometry.freeboard_in}&quot;</div>
+            </div>
+          </section>
+        )}
 
         <section>
           <h3 className="font-semibold">JSON Preview</h3>
