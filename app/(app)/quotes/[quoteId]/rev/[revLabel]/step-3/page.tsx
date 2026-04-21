@@ -19,49 +19,72 @@ export default async function Step3({ params }: { params: Promise<{ quoteId: str
 
   return (
     <WizardShell quoteId={quoteId} revLabel={revLabel} current="step-3">
-      <h2 className="text-xl font-semibold mb-4">Geometry & Orientation</h2>
-      <form action={save} className="space-y-4 text-sm">
-        <div className="grid grid-cols-2 gap-3">
-          <label className="space-y-1">
-            <span className="text-gray-600">Orientation</span>
-            <select name="orientation" defaultValue={g.orientation ?? 'vertical'} className="w-full rounded border px-3 py-2">
-              <option value="vertical">Vertical</option>
-              <option value="horizontal">Horizontal</option>
-            </select>
-          </label>
-          <label className="space-y-1">
-            <span className="text-gray-600">Inside Diameter (in)</span>
-            <input type="number" step="any" name="idIn" defaultValue={g.idIn ?? 120} required className="w-full rounded border px-3 py-2" />
-          </label>
-          <label className="space-y-1">
-            <span className="text-gray-600">Straight-side height (in)</span>
-            <input type="number" step="any" name="ssHeightIn" defaultValue={g.ssHeightIn ?? 144} required className="w-full rounded border px-3 py-2" />
-          </label>
-          <label className="space-y-1">
-            <span className="text-gray-600">Freeboard (in)</span>
-            <input type="number" step="any" name="freeboardIn" defaultValue={g.freeboardIn ?? 12} required className="w-full rounded border px-3 py-2" />
-          </label>
-          <label className="space-y-1">
-            <span className="text-gray-600">Top head</span>
-            <select name="topHead" defaultValue={g.topHead ?? 'F_AND_D'} className="w-full rounded border px-3 py-2">
-              <option value="flat">Flat</option>
-              <option value="F_AND_D">Flanged & Dished</option>
-              <option value="conical">Conical</option>
-              <option value="open_top_cover">Open Top w/ Cover</option>
-            </select>
-          </label>
-          <label className="space-y-1">
-            <span className="text-gray-600">Bottom</span>
-            <select name="bottom" defaultValue={g.bottom ?? 'flat_ring_supported'} className="w-full rounded border px-3 py-2">
-              <option value="flat_ring_supported">Flat w/ support ring</option>
-              <option value="dished">Dished</option>
-              <option value="conical_drain">Conical drain</option>
-              <option value="sloped">Sloped</option>
-            </select>
-          </label>
+      <header className="mb-8">
+        <div className="text-[11px] font-semibold tracking-[0.12em] uppercase text-amber-700 mb-2">
+          Step 3 of 5
         </div>
-        <div className="text-right">
-          <button className="rounded bg-blue-600 text-white px-4 py-2 text-sm">Save and continue →</button>
+        <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Geometry &amp; orientation</h2>
+        <p className="text-slate-500 mt-1.5 text-[15px]">
+          Overall vessel dimensions. Dimensions in inches; we convert as needed in engineering output.
+        </p>
+      </header>
+
+      <form action={save} className="space-y-8">
+
+        <section>
+          <h3 className="section-head">Overall</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <label className="glass-label">Orientation</label>
+              <select name="orientation" defaultValue={g.orientation ?? 'vertical'} className="glass-input">
+                <option value="vertical">Vertical</option>
+                <option value="horizontal">Horizontal</option>
+              </select>
+            </div>
+            <div>
+              <label className="glass-label">Inside diameter (in)</label>
+              <input type="number" step="any" name="idIn" defaultValue={g.idIn ?? 120} required className="glass-input" />
+            </div>
+            <div>
+              <label className="glass-label">Straight-side height (in)</label>
+              <input type="number" step="any" name="ssHeightIn" defaultValue={g.ssHeightIn ?? 144} required className="glass-input" />
+            </div>
+            <div>
+              <label className="glass-label">Freeboard (in)</label>
+              <input type="number" step="any" name="freeboardIn" defaultValue={g.freeboardIn ?? 12} required className="glass-input" />
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h3 className="section-head">Heads &amp; bottom</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="glass-label">Top head</label>
+              <select name="topHead" defaultValue={g.topHead ?? 'F_AND_D'} className="glass-input">
+                <option value="flat">Flat</option>
+                <option value="F_AND_D">Flanged &amp; dished</option>
+                <option value="conical">Conical</option>
+                <option value="open_top_cover">Open top w/ cover</option>
+              </select>
+            </div>
+            <div>
+              <label className="glass-label">Bottom</label>
+              <select name="bottom" defaultValue={g.bottom ?? 'flat_ring_supported'} className="glass-input">
+                <option value="flat_ring_supported">Flat w/ support ring</option>
+                <option value="dished">Dished</option>
+                <option value="conical_drain">Conical drain</option>
+                <option value="sloped">Sloped</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <div className="flex justify-end pt-4 border-t border-slate-200/60">
+          <button className="btn-glass-prominent">
+            Save and continue
+            <span aria-hidden>→</span>
+          </button>
         </div>
       </form>
     </WizardShell>

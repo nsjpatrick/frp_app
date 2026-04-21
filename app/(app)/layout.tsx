@@ -9,9 +9,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!session?.user?.email) redirect('/sign-in');
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="pti-ambient">
       <Nav userEmail={session.user.email} />
-      <main className="max-w-6xl mx-auto p-6">{children}</main>
+      <main className="max-w-[1180px] mx-auto px-6 pt-6 pb-24">{children}</main>
     </div>
   );
 }

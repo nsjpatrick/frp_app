@@ -19,82 +19,204 @@ export default async function Review({ params }: { params: Promise<{ quoteId: st
     { quote: rev.quote, revision: rev } as any,
     { rulesEngineVersion: RULES_ENGINE_VERSION, catalogSnapshotId: 'seed-v0' },
   );
+  const sa = json.structural_analysis;
 
   return (
     <WizardShell quoteId={quoteId} revLabel={revLabel} current="review">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold">Review & Generate</h2>
+      <header className="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <div className="text-[11px] font-semibold tracking-[0.12em] uppercase text-amber-700 mb-2">
+            Step 5 of 5
+          </div>
+          <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Review &amp; generate</h2>
+          <p className="text-slate-500 mt-1.5 text-[15px]">
+            Final spec check before engineering handoff.
+          </p>
+        </div>
         <a
           href={`/quotes/${quoteId}/rev/${revLabel}/engineering.json`}
-          className="rounded bg-blue-600 text-white px-4 py-2 text-sm"
+          className="btn-glass-prominent shrink-0"
         >
+          <span aria-hidden>↓</span>
           Download Engineering JSON
         </a>
+      </header>
+
+      <div className="banner-review mb-6">
+        <span className="text-xl leading-none shrink-0" aria-hidden>⚠</span>
+        <div>
+          <strong className="font-semibold">Preliminary — Engineering Review Required.</strong>
+          <p className="text-[13.5px] leading-relaxed mt-0.5 opacity-90">
+            Calculations produced per ASCE 7-22, ASTM D3299/D4097, and RTP-1.
+            A licensed PE must review before release for fabrication.
+          </p>
+        </div>
       </div>
 
-      <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm mb-4">
-        <strong>Preliminary — Engineering Review Required.</strong> Structural calculations are produced by the tool&apos;s rules engine per ASCE 7-22, ASTM D3299/D4097, and RTP-1. A licensed PE must review before release for fabrication.
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <Card label="Customer / project">
+          <div className="text-[15px] font-medium">{json.customer.name}</div>
+          <div className="text-slate-600">{json.project.name}</div>
+          <div className="text-slate-500 text-[13px] mt-1">{json.project.site_address ?? '—'}</div>
+        </Card>
+
+        <Card label="Service">
+          <div className="text-[15px] font-medium">
+            {json.service.chemical}
+            <span className="text-slate-400 font-normal">
+              {' '}({json.service.chemical_family})
+            </span>
+          </div>
+          <div className="text-slate-600 text-[13px] mt-1">
+            Op {json.service.operating_temp_F}°F · Design {json.service.design_temp_F}°F · SG {json.service.specific_gravity}
+          </div>
+        </Card>
+
+        <Card label="Certifications">
+          <div className="flex flex-wrap gap-1.5">
+            {json.certifications.asme_rtp1 && (
+              <span className="glass-chip glass-tinted-slate">
+                RTP-1 Class {json.certifications.asme_rtp1.class}
+              </span>
+            )}
+            {json.certifications.nsf_ansi_61.required && (
+              <span className="glass-chip glass-tinted-emerald">NSF/ANSI 61</span>
+            )}
+            {json.certifications.nsf_ansi_2.required && (
+              <span className="glass-chip glass-tinted-emerald">NSF/ANSI 2</span>
+            )}
+            {!json.certifications.asme_rtp1 &&
+              !json.certifications.nsf_ansi_61.required &&
+              !json.certifications.nsf_ansi_2.required && (
+                <span className="text-[13px] text-slate-400">None selected</span>
+              )}
+            {json.certifications.third_party_inspector !== 'NONE' && (
+              <span className="glass-chip">
+                Inspector: {json.certifications.third_party_inspector}
+              </span>
+            )}
+          </div>
+        </Card>
+
+        <Card label="Geometry">
+          <div className="text-[15px] font-medium capitalize">{json.geometry.orientation}</div>
+          <div className="text-slate-600 text-[13px] mt-1">
+            {json.geometry.id_in}&quot; ID × {json.geometry.ss_height_in}&quot; SS<br/>
+            Top {json.geometry.top_head.replace(/_/g, ' ')} · Bottom {json.geometry.bottom.replace(/_/g, ' ')}
+          </div>
+        </Card>
+
+        <Card label="Resin" className="md:col-span-2">
+          <div className="text-[15px] font-medium">
+            {json.wall_buildup.corrosion_barrier.resin ?? (
+              <span className="text-slate-400 font-normal">No resin selected</span>
+            )}
+          </div>
+        </Card>
       </div>
 
-      <div className="space-y-4 text-sm">
-        <section>
-          <h3 className="font-semibold">Customer / Project</h3>
-          <div className="text-gray-700">{json.customer.name} · {json.project.name} · {json.project.site_address ?? '—'}</div>
-        </section>
-
-        <section>
-          <h3 className="font-semibold">Service</h3>
-          <div className="text-gray-700">
-            {json.service.chemical} ({json.service.chemical_family})
-            · Op {json.service.operating_temp_F}°F / Design {json.service.design_temp_F}°F
-            · SG {json.service.specific_gravity}
+      {sa && (
+        <div className="glass-raised p-6 mb-6">
+          <div className="flex items-baseline justify-between gap-3 mb-4">
+            <h3 className="section-head mb-0">Structural analysis (preliminary)</h3>
+            <span className="glass-chip glass-tinted-amber text-[11px]">Review required</span>
           </div>
-        </section>
 
-        <section>
-          <h3 className="font-semibold">Certifications</h3>
-          <div className="text-gray-700">
-            {json.certifications.asme_rtp1 ? `ASME RTP-1 Class ${json.certifications.asme_rtp1.class}` : 'No ASME RTP-1'}
-            {' · '}
-            {json.certifications.nsf_ansi_61.required ? 'NSF/ANSI 61' : '—'}
-            {' · '}
-            {json.certifications.nsf_ansi_2.required ? 'NSF/ANSI 2' : '—'}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Metric
+              label="Shell thickness"
+              value={`${sa.wallThickness.shellThicknessIn}″`}
+              hint={`Governed by ${sa.wallThickness.governingRule.replace(/_/g, ' ')}`}
+            />
+            <Metric
+              label="Head thickness"
+              value={`${sa.wallThickness.headThicknessIn}″`}
+              hint="1.15 × shell"
+            />
+            <Metric
+              label="Wind base shear"
+              value={`${sa.wind.baseShearLbf.toLocaleString()}`}
+              suffix="lbf"
+            />
+            <Metric
+              label="Seismic base shear"
+              value={`${sa.seismic.baseShearLbf.toLocaleString()}`}
+              suffix="lbf"
+            />
+            <Metric
+              label="Governing case"
+              value={sa.loadCombination.governingCase}
+              hint={`Uplift ${sa.loadCombination.governingUpliftLbf.toLocaleString()} lbf`}
+              wide
+            />
+            <Metric
+              label="Anchor"
+              value={`${sa.anchor.qty} × ${sa.anchor.anchorDetailId}`}
+              hint={`${sa.anchor.selectedCapacityLbfEach.toLocaleString()} lbf each`}
+              wide
+            />
+            <Metric
+              label="Slosh freeboard"
+              value={`${sa.seismic.requiredFreeboardIn}″ req`}
+              hint={`${json.geometry.freeboard_in}″ provided`}
+              wide
+            />
           </div>
-        </section>
+        </div>
+      )}
 
-        <section>
-          <h3 className="font-semibold">Geometry</h3>
-          <div className="text-gray-700">
-            {json.geometry.orientation} · {json.geometry.id_in}&quot; ID × {json.geometry.ss_height_in}&quot; SS ·
-            top {json.geometry.top_head} · bottom {json.geometry.bottom}
-          </div>
-        </section>
-
-        <section>
-          <h3 className="font-semibold">Resin</h3>
-          <div className="text-gray-700">{json.wall_buildup.corrosion_barrier.resin ?? 'None selected'}</div>
-        </section>
-
-        {json.structural_analysis && (
-          <section>
-            <h3 className="font-semibold">Structural Analysis (preliminary)</h3>
-            <div className="text-gray-700 space-y-1 text-sm">
-              <div>Wall: shell {json.structural_analysis.wallThickness.shellThicknessIn}&quot; · head {json.structural_analysis.wallThickness.headThicknessIn}&quot; · governed by {json.structural_analysis.wallThickness.governingRule}</div>
-              <div>Wind base shear: {json.structural_analysis.wind.baseShearLbf.toLocaleString()} lbf · Seismic base shear: {json.structural_analysis.seismic.baseShearLbf.toLocaleString()} lbf</div>
-              <div>Governing case: <strong>{json.structural_analysis.loadCombination.governingCase}</strong> · uplift {json.structural_analysis.loadCombination.governingUpliftLbf.toLocaleString()} lbf</div>
-              <div>Anchor: {json.structural_analysis.anchor.qty} × {json.structural_analysis.anchor.anchorDetailId} (capacity {json.structural_analysis.anchor.selectedCapacityLbfEach.toLocaleString()} lbf each)</div>
-              <div>Required freeboard (slosh): {json.structural_analysis.seismic.requiredFreeboardIn}&quot; · provided: {json.geometry.freeboard_in}&quot;</div>
-            </div>
-          </section>
-        )}
-
-        <section>
-          <h3 className="font-semibold">JSON Preview</h3>
-          <pre className="bg-gray-50 border rounded p-3 text-xs overflow-auto max-h-[400px]">
+      <details className="glass p-5">
+        <summary className="cursor-pointer text-[13px] font-semibold text-slate-700 select-none">
+          Engineering JSON preview
+        </summary>
+        <pre className="mt-3 text-[11px] text-slate-600 font-mono leading-relaxed overflow-auto max-h-[420px]">
 {JSON.stringify(json, null, 2)}
-          </pre>
-        </section>
-      </div>
+        </pre>
+      </details>
     </WizardShell>
+  );
+}
+
+function Card({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`glass p-5 ${className ?? ''}`}>
+      <div className="glass-label mb-2">{label}</div>
+      {children}
+    </div>
+  );
+}
+
+function Metric({
+  label,
+  value,
+  hint,
+  suffix,
+  wide,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  suffix?: string;
+  wide?: boolean;
+}) {
+  return (
+    <div className={wide ? 'col-span-2 md:col-span-2' : ''}>
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
+        {label}
+      </div>
+      <div className="text-[20px] font-semibold tracking-tight text-slate-900 leading-tight">
+        {value}
+        {suffix && <span className="text-[13px] font-normal text-slate-500 ml-1">{suffix}</span>}
+      </div>
+      {hint && <div className="text-[12px] text-slate-500 mt-1">{hint}</div>}
+    </div>
   );
 }
