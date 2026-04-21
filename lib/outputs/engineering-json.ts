@@ -67,6 +67,7 @@ export function buildEngineeringJson(
       specific_gravity: rev.service.specificGravity,
       operating_pressure_psig: rev.service.operatingPressurePsig,
       vacuum_psig: rev.service.vacuumPsig,
+      post_cure: !!rev.service.postCure,
     },
 
     site: {
@@ -107,7 +108,7 @@ export function buildEngineeringJson(
     },
 
     structural_analysis: rev.outputs?.structuralAnalysis ?? null,
-    nozzles: [],
+    nozzles: Array.isArray(rev.geometry?.nozzles) ? rev.geometry.nozzles : [],
     accessories: [],
     anchorage: null,
     flags: [],

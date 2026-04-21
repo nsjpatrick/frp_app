@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { ArrowRight } from 'lucide-react';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { WizardShell } from '@/components/wizard/WizardShell';
@@ -6,6 +7,17 @@ import { saveResinStep } from '@/lib/actions/revisions';
 import { SEED_RESINS } from '@/lib/catalog/seed-data';
 import { filterByChemistry } from '@/lib/rules/compatibility';
 import { filterByCertifications } from '@/lib/rules/certification-filter';
+
+const FAMILY_LABEL: Record<string, string> = {
+  vinyl_ester: 'Vinyl Ester',
+  bis_a_epoxy_ve: 'Bisphenol-A Epoxy VE',
+  novolac_epoxy_ve: 'Novolac Epoxy VE',
+  iso_polyester: 'Isophthalic Polyester',
+  ortho_polyester: 'Orthophthalic Polyester',
+  chlorendic_polyester: 'Chlorendic Polyester',
+  bpa_fumarate: 'BPA Fumarate Polyester',
+  elastomer_modified: 'Elastomer-Modified VE',
+};
 
 export default async function Step4({ params }: { params: Promise<{ quoteId: string; revLabel: string }> }) {
   const { quoteId, revLabel } = await params;
@@ -34,30 +46,93 @@ export default async function Step4({ params }: { params: Promise<{ quoteId: str
 
   return (
     <WizardShell quoteId={quoteId} revLabel={revLabel} current="step-4">
-      <h2 className="text-xl font-semibold mb-4">Resin & Wall Buildup</h2>
+      <header className="mb-8">
+        <div className="text-[11px] font-semibold tracking-[0.12em] uppercase text-amber-700 mb-2">
+          Step 4 of 5
+        </div>
+        <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Resin &amp; Wall Buildup</h2>
+        <p className="text-slate-500 mt-1.5 text-[15px]">
+          Candidates filtered by chemistry, design temperature, and selected certifications.
+        </p>
+      </header>
 
       {eligible.length === 0 ? (
-        <div className="rounded border border-amber-300 bg-amber-50 p-4 text-sm">
-          <strong>No eligible resin.</strong> The chemistry + certification combination eliminated all candidates from the V1 catalog. This revision will be flagged for engineering review.
+        <div className="banner-review">
+          <span className="shrink-0 text-xl leading-none" aria-hidden>⚠</span>
+          <div>
+            <strong className="font-semibold">No Eligible Resin.</strong>
+            <p className="mt-1 text-[14px] leading-relaxed">
+              The chemistry + certification combination eliminated all candidates from the V1 catalog.
+              This revision will be flagged for engineering review.
+            </p>
+          </div>
         </div>
       ) : (
-        <form action={save} className="space-y-4 text-sm">
-          <p className="text-gray-500">{eligible.length} of {SEED_RESINS.length} catalog resins pass chemistry + certification filters.</p>
-          <div className="space-y-2">
-            {eligible.map((r) => (
-              <label key={r.id} className="flex items-start gap-3 border rounded p-3 cursor-pointer hover:bg-gray-50">
-                <input type="radio" name="resinId" value={r.id} defaultChecked={w.resinId === r.id} required />
-                <div>
-                  <div className="font-medium">{r.name} <span className="text-gray-500 font-normal">({r.supplier})</span></div>
-                  <div className="text-xs text-gray-500">
-                    Family: {r.family} · Max service temp: {r.max_service_temp_F}°F · ${r.price_per_lb.toFixed(2)}/lb
-                  </div>
-                </div>
-              </label>
-            ))}
+        <form action={save} className="space-y-6">
+          <div className="flex items-center gap-2 text-[13px] text-slate-500">
+            <span className="glass-chip glass-tinted-emerald">
+              {eligible.length} of {SEED_RESINS.length} pass filters
+            </span>
+            <span className="text-slate-400">· chemistry + certifications + design temp</span>
           </div>
-          <div className="text-right">
-            <button className="rounded bg-blue-600 text-white px-4 py-2 text-sm">Continue to review →</button>
+
+          <div className="grid grid-cols-1 gap-3">
+            {eligible.map((r, idx) => {
+              const checked = w.resinId === r.id || (idx === 0 && !w.resinId);
+              return (
+                // Opaque rather than .glass — nested backdrop-filter fails in
+                // Safari (parent WizardShell main panel is already .glass-raised).
+                <label
+                  key={r.id}
+                  className={`bg-white/85 border border-slate-200/60 rounded-2xl p-5 cursor-pointer flex items-start gap-4 transition-all hover:bg-white hover:-translate-y-0.5 ${
+                    checked ? 'ring-2 ring-amber-400/60' : ''
+                  }`}
+                  style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7), 0 1px 2px rgba(15,23,42,0.03)' }}
+                >
+                  <input
+                    type="radio"
+                    name="resinId"
+                    value={r.id}
+                    defaultChecked={checked}
+                    required
+                    className="mt-1.5 w-4 h-4 accent-amber-600"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-3 flex-wrap">
+                      <div className="text-[16px] font-semibold tracking-tight">
+                        {r.name}
+                      </div>
+                      <div className="text-[13px] text-slate-500">{r.supplier}</div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-2.5">
+                      <span className="glass-chip">{FAMILY_LABEL[r.family] ?? r.family}</span>
+                      <span className="glass-chip">Max {r.max_service_temp_F}°F</span>
+                      <span className="glass-chip">${r.price_per_lb.toFixed(2)}/lb</span>
+                      {r.certifications.nsf_ansi_61.listed && (
+                        <span className="glass-chip glass-tinted-emerald">
+                          NSF 61 to {r.certifications.nsf_ansi_61.max_temp_F}°F
+                        </span>
+                      )}
+                      {r.certifications.nsf_ansi_2.listed && (
+                        <span className="glass-chip glass-tinted-emerald">NSF 2</span>
+                      )}
+                      {r.certifications.asme_rtp1_class_eligibility.length > 0 && (
+                        <span className="glass-chip glass-tinted-slate">
+                          RTP-1 {r.certifications.asme_rtp1_class_eligibility.join('/')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-end pt-4 border-t border-slate-200/60">
+            <button className="btn-glass-prominent">
+              Next
+              <ArrowRight className="w-4 h-4" strokeWidth={2.5} aria-hidden />
+            </button>
           </div>
         </form>
       )}

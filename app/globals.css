@@ -1,26 +1,421 @@
 @import "tailwindcss";
 
+/* ----------------------------------------------------------------------------
+ * PTI Liquid Glass — design tokens and surface primitives.
+ * Translated from Apple's Liquid Glass design language to web CSS:
+ * backdrop-filter:blur() for translucency, inset specular rim highlights,
+ * subtle gradient background so blur has something to pick up, consistent
+ * corner radii, spring-ish cubic-beziers for state changes.
+ * ------------------------------------------------------------------------- */
+
 :root {
+  --pti-amber:     #d97706;
+  --pti-amber-50:  #fffaf0;
+  --pti-amber-100: #fef3c7;
+  --pti-ink:       #0f172a;
+  --pti-muted:     #475569;
+  --pti-subtle:    #64748b;
+  --pti-hairline:  rgba(15, 23, 42, 0.08);
+
+  --ambient-1: #f1f5f9;
+  --ambient-2: #fde7c8;
+  --ambient-3: #dbeafe;
+  --ambient-4: #fef3c7;
+
+  --radius-xl:   24px;
+  --radius-lg:   18px;
+  --radius-md:   12px;
+  --radius-sm:   8px;
+
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-1:  180ms;
+  --duration-2:  320ms;
+
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: var(--pti-ink);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-pti-amber: var(--pti-amber);
+  --color-pti-ink:   var(--pti-ink);
+  --color-pti-muted: var(--pti-muted);
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+               "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
+html, body {
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
+
+/* Ambient background — radial gradients so glass surfaces blur through color. */
+/* NOTE: no `background-attachment: fixed` — Safari cannot composite a child
+ * backdrop-filter over a fixed background, resulting in cloudy/unblurred glass
+ * surfaces. The gradient scrolls with content, which is fine because glass
+ * cards blur whatever's directly behind them locally. */
+body {
+  background:
+    radial-gradient(60% 80% at 10% 0%,   var(--ambient-4) 0%, transparent 60%),
+    radial-gradient(50% 70% at 90% 10%,  var(--ambient-3) 0%, transparent 55%),
+    radial-gradient(60% 60% at 80% 100%, var(--ambient-2) 0%, transparent 60%),
+    radial-gradient(40% 50% at 0% 100%,  var(--ambient-1) 0%, transparent 65%),
+    linear-gradient(180deg, #fafbfd 0%, #f4f6fa 100%);
+  background-repeat: no-repeat;
+  min-height: 100vh;
+}
+.pti-ambient {
+  position: relative;
+  min-height: 100vh;
+  /* `isolation: isolate` creates a stacking context so child backdrop-filter
+   * effects composite against only the ambient layer, not the browser chrome.
+   * This is a required workaround for Safari on nested filtered surfaces. */
+  isolation: isolate;
+}
+
+/* Glass surfaces — three tiers: standard / raised / compact pill. */
+.glass,
+.glass-raised,
+.glass-chip {
+  position: relative;
+  background-clip: padding-box;
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.04),
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 30px -12px rgba(15, 23, 42, 0.15);
+}
+
+.glass {
+  background-color: rgba(255, 255, 255, 0.55);
+  border-radius: var(--radius-xl);
+}
+
+.glass-raised {
+  background-color: rgba(255, 255, 255, 0.72);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.05),
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 24px 60px -24px rgba(15, 23, 42, 0.2);
+}
+
+.glass-chip {
+  background-color: rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+  padding: 0.375rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--pti-ink);
+  /* Override the near-invisible white border from the shared .glass/.glass-raised
+   * rule with a subtle slate edge so the chip's container reads on opaque parent
+   * cards (e.g. the resin detail card). Tinted variants override this again. */
+  border-color: rgba(15, 23, 42, 0.14);
+}
+
+
+/* Interactive glass — lifts + brightens on hover, presses on active. */
+.glass-interactive {
+  transition:
+    transform var(--duration-1) var(--ease-spring),
+    background-color var(--duration-1) var(--ease-spring),
+    box-shadow var(--duration-2) var(--ease-spring);
+  cursor: pointer;
+}
+.glass-interactive:hover {
+  background-color: rgba(255, 255, 255, 0.78);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(15, 23, 42, 0.06),
+    0 2px 4px rgba(15, 23, 42, 0.06),
+    0 16px 40px -12px rgba(15, 23, 42, 0.22);
+}
+.glass-interactive:active {
+  transform: translateY(0) scale(0.995);
+}
+
+/* Tinted glass variants. */
+.glass-tinted-amber {
+  background:
+    linear-gradient(180deg, rgba(253, 230, 138, 0.55), rgba(251, 191, 36, 0.35)),
+    rgba(255, 255, 255, 0.3);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #78350f;
+}
+.glass-tinted-slate {
+  background:
+    linear-gradient(180deg, rgba(226, 232, 240, 0.55), rgba(148, 163, 184, 0.25)),
+    rgba(255, 255, 255, 0.3);
+  border-color: rgba(100, 116, 139, 0.3);
+  color: var(--pti-ink);
+}
+.glass-tinted-emerald {
+  background:
+    linear-gradient(180deg, rgba(187, 247, 208, 0.55), rgba(74, 222, 128, 0.3)),
+    rgba(255, 255, 255, 0.3);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #064e3b;
+}
+
+/* Glass buttons — standard + prominent (amber PTI primary). */
+.btn-glass {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.125rem;
+  font-weight: 500;
+  font-size: 0.9375rem;
+  border-radius: 999px;
+  color: var(--pti-ink);
+  background-color: rgba(255, 255, 255, 0.7);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 8px 20px -8px rgba(15, 23, 42, 0.18);
+  transition: all var(--duration-1) var(--ease-spring);
+  cursor: pointer;
+  text-decoration: none;
+}
+.btn-glass:hover {
+  background-color: rgba(255, 255, 255, 0.88);
+  transform: translateY(-1px);
+}
+.btn-glass:active { transform: translateY(0) scale(0.98); }
+.btn-glass:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.btn-glass-prominent {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.375rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  border-radius: 999px;
+  color: white;
+  /* Matches the Quotes table "Open" link color (Tailwind amber-700 #b45309) */
+  background-color: #b45309;
+  border: 1px solid rgba(69, 26, 3, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    inset 0 -1px 0 rgba(69, 26, 3, 0.35),
+    0 1px 2px rgba(120, 53, 15, 0.25),
+    0 12px 28px -8px rgba(180, 83, 9, 0.55);
+  transition: all var(--duration-1) var(--ease-spring);
+  cursor: pointer;
+  text-decoration: none;
+}
+.btn-glass-prominent:hover {
+  /* Matches Open link's hover (amber-900 #78350f) — go darker, not lighter. */
+  background-color: #92400e;
+  transform: translateY(-1px);
+}
+.btn-glass-prominent:active { transform: translateY(0) scale(0.98); }
+.btn-glass-prominent:disabled {
+  opacity: 0.5; cursor: not-allowed; transform: none; filter: none;
+}
+
+/* Secondary button — slate solid. Pairs with .btn-glass-prominent (amber
+ * primary). Use for secondary actions (Back, Cancel, alternate flows) or
+ * when an action needs weight but shouldn't compete with the primary CTA. */
+.btn-glass-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.375rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  border-radius: 999px;
+  color: white;
+  background-color: #334155; /* slate-700 */
+  border: 1px solid rgba(15, 23, 42, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+    0 1px 2px rgba(15, 23, 42, 0.25),
+    0 12px 28px -10px rgba(15, 23, 42, 0.35);
+  transition: all var(--duration-1) var(--ease-spring);
+  cursor: pointer;
+  text-decoration: none;
+}
+.btn-glass-secondary:hover {
+  background-color: #1e293b; /* slate-800 */
+  transform: translateY(-1px);
+}
+.btn-glass-secondary:active { transform: translateY(0) scale(0.98); }
+.btn-glass-secondary:disabled {
+  opacity: 0.5; cursor: not-allowed; transform: none;
+}
+
+/* Form controls — tight, glassy inputs. */
+.glass-input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.9375rem;
+  color: var(--pti-ink);
+  background-color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: var(--radius-md);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: all var(--duration-1) var(--ease-spring);
+  outline: none;
+  font-family: inherit;
+}
+.glass-input:hover { background-color: rgba(255, 255, 255, 0.85); }
+.glass-input:focus {
+  background-color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(217, 119, 6, 0.5);
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.18);
+}
+.glass-input::placeholder { color: var(--pti-subtle); }
+
+/* Normalize native <select> so Safari, Chrome, and Firefox all render the
+ * same chrome. Strip the OS-native chevron and paint our own via
+ * background-image so padding (-pr-N from Tailwind) has predictable effect. */
+select.glass-input {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 10px 6px;
+  padding-right: 2rem;
+}
+/* Firefox leaves a dotted focus outline inside selects unless we opt out. */
+select.glass-input:-moz-focusring { color: transparent; text-shadow: 0 0 0 var(--pti-ink); }
+
+/* Tight-padding select for narrow table columns (e.g. nozzle schedule). The
+ * default pr=2rem leaves too much empty space when the column is ≤90px and
+ * browsers end up cropping the value text. Shrink the chevron inset so all
+ * content fits with room to spare. */
+select.glass-input.glass-input-tight {
+  padding-left: 0.625rem;
+  padding-right: 1.375rem;
+  background-position: right 0.45rem center;
+}
+
+/* Backdrop-filter fallback — browsers without support (older Firefox LTS,
+ * very old Safari) get an opaque surface instead of the translucent glass. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass, .glass-raised, .glass-chip,
+  .btn-glass, .btn-glass-prominent, .glass-input { background-color: rgba(255, 255, 255, 0.96); }
+}
+
+.glass-label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--pti-muted);
+  margin-bottom: 0.375rem;
+}
+
+/* Wizard step pills — three states (upcoming / current / completed). */
+.step-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--pti-muted);
+  transition: all var(--duration-1) var(--ease-spring);
+  position: relative;
+  text-decoration: none;
+}
+.step-pill .step-num {
+  display: flex; align-items: center; justify-content: center;
+  width: 1.75rem; height: 1.75rem; border-radius: 999px;
+  font-size: 0.75rem; font-weight: 700;
+  background-color: rgba(255,255,255,0.7);
+  border: 1px solid rgba(15,23,42,0.1);
+  color: var(--pti-muted);
+  flex-shrink: 0;
+}
+.step-pill:hover { background-color: rgba(255,255,255,0.5); }
+
+.step-pill.current {
+  color: var(--pti-ink);
+  background: linear-gradient(180deg, rgba(253,230,138,0.6), rgba(251,191,36,0.35));
+  border: 1px solid rgba(245,158,11,0.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.9),
+    0 10px 28px -8px rgba(217,119,6,0.35);
+}
+.step-pill.current .step-num {
+  background: linear-gradient(180deg, #f59e0b, #d97706);
+  border-color: rgba(120,53,15,0.4);
+  color: white;
+  box-shadow: 0 4px 12px -2px rgba(217,119,6,0.5);
+}
+
+.step-pill.completed { color: var(--pti-ink); }
+.step-pill.completed .step-num {
+  background: linear-gradient(180deg, #6ee7b7, #10b981);
+  border-color: rgba(6,78,59,0.4);
+  color: white;
+}
+
+/* Section divider — small caps header with amber accent bar. */
+.section-head {
+  display: flex; align-items: baseline; gap: 0.75rem;
+  font-size: 0.8125rem; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--pti-ink); margin-bottom: 1rem;
+}
+.section-head::before {
+  content: "";
+  width: 1.5rem; height: 2px; border-radius: 1px;
+  background: linear-gradient(90deg, var(--pti-amber), transparent);
+  flex-shrink: 0;
+  transform: translateY(-2px);
+}
+
+/* Pill-toggle (used for required-yes/no like NSF 61). */
+.toggle-pill {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.5rem 0.875rem; font-size: 0.875rem; font-weight: 500;
+  border-radius: 999px; cursor: pointer; user-select: none;
+  background-color: rgba(255,255,255,0.6);
+  border: 1px solid rgba(15,23,42,0.08);
+  color: var(--pti-muted);
+  transition: all var(--duration-1) var(--ease-spring);
+}
+.toggle-pill:hover { background-color: rgba(255,255,255,0.8); color: var(--pti-ink); }
+.toggle-pill.on {
+  background: linear-gradient(180deg, rgba(253,230,138,0.7), rgba(251,191,36,0.45));
+  border-color: rgba(245,158,11,0.5);
+  color: #78350f;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), 0 6px 16px -6px rgba(217,119,6,0.35);
+}
+.toggle-pill input { position: absolute; opacity: 0; pointer-events: none; }
+
+/* Review page info banner — attention but not alarm. */
+.banner-review {
+  display: flex; gap: 0.75rem; align-items: flex-start;
+  padding: 1rem 1.125rem; border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(254,243,199,0.7), rgba(253,230,138,0.45));
+  border: 1px solid rgba(245,158,11,0.35);
+  color: #78350f;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.85);
+}
+
+/* Hover-lift utility for clickable glass cards. */
+.hover-lift { transition: transform var(--duration-1) var(--ease-spring); }
+.hover-lift:hover { transform: translateY(-2px); }

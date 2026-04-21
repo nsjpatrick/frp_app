@@ -36,6 +36,7 @@ export async function saveServiceStep(quoteId: string, label: string, formData: 
     specificGravity: Number(formData.get('specificGravity')),
     operatingPressurePsig: Number(formData.get('operatingPressurePsig')),
     vacuumPsig: Number(formData.get('vacuumPsig')),
+    postCure: formData.get('postCure') === 'on',
   });
 
   const certs = certificationRequirementsSchema.parse({
@@ -80,6 +81,20 @@ export async function saveGeometryStep(quoteId: string, label: string, formData:
     topHead: formData.get('topHead'),
     bottom: formData.get('bottom'),
     freeboardIn: Number(formData.get('freeboardIn')),
+    nozzles: (() => {
+      try {
+        const raw = formData.get('nozzlesJson');
+        return raw ? JSON.parse(String(raw)) : [];
+      } catch {
+        return [];
+      }
+    })(),
+    baffles: formData.get('baffles') === 'on',
+    baffleCount: formData.get('baffles') === 'on' ? Number(formData.get('baffleCount') || 0) : 0,
+    stainlessStand: formData.get('stainlessStand') === 'on',
+    stainlessGrade: formData.get('stainlessStand') === 'on'
+      ? (formData.get('stainlessGrade') as string | null) || null
+      : null,
   });
 
   await db.revision.update({ where: { id: rev.id }, data: { geometry } });
