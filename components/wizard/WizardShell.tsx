@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { LiveSummaryMock } from './LiveSummaryMock';
 
 const STEPS = [
   { n: 1, label: 'Customer & Project', path: 'step-1' },
@@ -8,9 +9,6 @@ const STEPS = [
   { n: 5, label: 'Review & Generate', path: 'review' },
 ];
 
-// Explicit visit order so we can decide what's "completed" vs "upcoming"
-// relative to the current step. "Completed" is derived (everything before
-// current) until we wire real completion signals from the revision state.
 function stateFor(currentPath: string, stepPath: string): 'completed' | 'current' | 'upcoming' {
   const currentIdx = STEPS.findIndex((s) => s.path === currentPath);
   const thisIdx = STEPS.findIndex((s) => s.path === stepPath);
@@ -19,6 +17,19 @@ function stateFor(currentPath: string, stepPath: string): 'completed' | 'current
   return 'upcoming';
 }
 
+/**
+ * WizardShell — 3-column configurator layout.
+ *
+ * Vertical sizing: rails (left + right) use `self-start` so each column hugs
+ * its own content; the CENTER column has `max-height: calc(100vh - 9rem)` +
+ * `overflow-y-auto`, so when page content is short everything stays compact,
+ * and when the form is long only the middle scrolls while the rails stay
+ * visible above the fold.
+ *
+ * Top alignment: all three columns use the same `pt-6 md:pt-8` so their
+ * first visible row (left = "Quote · Rev" eyebrow, middle = step page
+ * header, right = live-summary eyebrow) sits at the same Y.
+ */
 export function WizardShell({
   quoteId,
   revLabel,
@@ -33,10 +44,9 @@ export function WizardShell({
   summary?: React.ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_300px] gap-5 mt-6">
-      {/* Left — step nav. Shares pt-8 / pt-10 with the other two columns
-          so the first content row (eyebrow / label) lines up horizontally. */}
-      <aside className="glass px-3 pt-8 md:pt-10 pb-4 self-start sticky top-[92px]">
+    <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_300px] gap-5 mt-6 items-start">
+      {/* Left — step nav. Natural height; hugs its content. */}
+      <aside className="glass px-3 pt-6 md:pt-8 pb-4">
         <div className="px-2 pb-3 text-[10px] font-semibold tracking-[0.12em] uppercase text-slate-500">
           Quote {quoteId.slice(0, 6)} · Rev {revLabel}
         </div>
@@ -59,26 +69,19 @@ export function WizardShell({
         </nav>
       </aside>
 
-      {/* Center — content. p-8/p-10 top padding is the anchor the two rails
-          match against. */}
-      <section className="glass-raised p-8 md:p-10 min-h-[520px]">
+      {/* Center — the only column that can scroll internally. Max-height
+          keeps it within the viewport so page-level scroll never engages
+          while the rails stay in place. */}
+      <section
+        className="glass-raised px-8 md:px-10 pt-6 md:pt-8 pb-6 md:pb-8 overflow-y-auto min-h-0"
+        style={{ maxHeight: 'calc(100vh - 9rem)' }}
+      >
         {children}
       </section>
 
-      {/* Right — live summary rail. pt-8/pt-10 matches center column. */}
-      <aside className="glass px-5 pt-8 md:pt-10 pb-5 self-start sticky top-[92px]">
-        <div className="text-[10px] font-semibold tracking-[0.12em] uppercase text-slate-500 mb-3">
-          Live Summary
-        </div>
-        {summary ?? (
-          <div className="space-y-3 text-sm">
-            <div className="glass-chip">Pricing engine lands in Plan 3</div>
-            <p className="text-slate-500 text-[13px] leading-relaxed">
-              Totals, material breakdowns, and engineering-review flags will
-              appear here as you move through the wizard.
-            </p>
-          </div>
-        )}
+      {/* Right — live summary. Natural height; hugs its content. */}
+      <aside className="glass px-5 pt-6 md:pt-8 pb-5">
+        {summary ?? <LiveSummaryMock />}
       </aside>
     </div>
   );

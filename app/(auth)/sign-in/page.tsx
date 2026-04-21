@@ -43,17 +43,17 @@ export default function SignInPage() {
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center text-center mb-8">
           <div className="glass-raised p-3 rounded-3xl mb-5">
-            <Image src="/PTI_logo.png" alt="PTI" width={56} height={56} className="rounded-xl" priority />
+            <Image src="/PTI_logo.svg" alt="PTI" width={379} height={356} className="h-14 w-14 object-contain" priority />
           </div>
           <h1 className="text-[22px] font-semibold tracking-tight">Plas-Tanks Industries</h1>
-          <p className="text-[13.5px] text-slate-500 mt-1">FRP Tank Quoter · Sign in</p>
+          <p className="text-[13.5px] text-slate-500 mt-1">FRP Tank Quoter · Sign In</p>
         </div>
 
         <div className="glass-raised p-7 space-y-5">
           {sent ? (
             <div className="text-center py-6">
               <div className="text-2xl mb-3">📬</div>
-              <div className="font-medium text-slate-900">Check your email</div>
+              <div className="font-medium text-slate-900">Check Your Email</div>
               <p className="text-[13.5px] text-slate-500 mt-1 leading-relaxed">
                 We sent a sign-in link to <strong className="text-slate-700">{email}</strong>.
               </p>
@@ -61,14 +61,14 @@ export default function SignInPage() {
                 onClick={() => setSent(false)}
                 className="btn-glass text-[13px] mt-5"
               >
-                Use a different email
+                Use a Different Email
               </button>
             </div>
           ) : (
             <>
               <form onSubmit={handleMagic} className="space-y-4">
                 <div>
-                  <label htmlFor="email" className="glass-label">Work email</label>
+                  <label htmlFor="email" className="glass-label">Work Email</label>
                   <input
                     id="email"
                     type="email"
@@ -85,7 +85,7 @@ export default function SignInPage() {
                   disabled={pendingMagic || !email}
                   className="btn-glass-prominent w-full justify-center"
                 >
-                  {pendingMagic ? 'Sending…' : 'Send magic link'}
+                  {pendingMagic ? 'Sending…' : 'Send Magic Link'}
                 </button>
               </form>
 
@@ -103,10 +103,10 @@ export default function SignInPage() {
                     className="btn-glass w-full justify-center text-[13px]"
                   >
                     {pendingDev
-                      ? 'Signing in…'
+                      ? 'Signing In…'
                       : email
-                        ? `Dev: sign in as ${email}`
-                        : 'Dev: sign in as seeded admin'}
+                        ? `Dev: Sign In as ${email}`
+                        : 'Dev: Sign In as Seeded Admin'}
                   </button>
                   {devError && (
                     <p className="text-[12px] text-red-700 text-center">{devError}</p>

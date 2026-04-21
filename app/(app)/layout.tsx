@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="pti-ambient">
       <Nav userEmail={session.user.email} />
-      <main className="max-w-[1180px] mx-auto px-6 pt-6 pb-24">{children}</main>
+      <main className="max-w-[1180px] mx-auto px-6 py-6">{children}</main>
     </div>
   );
 }

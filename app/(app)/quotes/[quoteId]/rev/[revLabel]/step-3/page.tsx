@@ -1,8 +1,21 @@
 import { notFound } from 'next/navigation';
+import { ArrowRight } from 'lucide-react';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { WizardShell } from '@/components/wizard/WizardShell';
 import { saveGeometryStep } from '@/lib/actions/revisions';
+import { NozzleSchedule } from '@/components/wizard/NozzleSchedule';
+
+const STAINLESS_LABEL: Array<[string, string]> = [
+  ['SS304',           '304'],
+  ['SS304L',          '304L'],
+  ['SS316',           '316'],
+  ['SS316L',          '316L'],
+  ['SS2205_DUPLEX',   '2205 Duplex'],
+  ['SS904L',          '904L (High-Moly)'],
+  ['SS321',           '321 (Ti-Stabilized)'],
+  ['SS17_4PH',        '17-4 PH (Precipitation-Hardened)'],
+];
 
 export default async function Step3({ params }: { params: Promise<{ quoteId: string; revLabel: string }> }) {
   const { quoteId, revLabel } = await params;
@@ -23,7 +36,7 @@ export default async function Step3({ params }: { params: Promise<{ quoteId: str
         <div className="text-[11px] font-semibold tracking-[0.12em] uppercase text-amber-700 mb-2">
           Step 3 of 5
         </div>
-        <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Geometry &amp; orientation</h2>
+        <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Geometry &amp; Orientation</h2>
         <p className="text-slate-500 mt-1.5 text-[15px]">
           Overall vessel dimensions. Dimensions in inches; we convert as needed in engineering output.
         </p>
@@ -33,7 +46,8 @@ export default async function Step3({ params }: { params: Promise<{ quoteId: str
 
         <section>
           <h3 className="section-head">Overall</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {/* items-end so inputs bottom-align even when a label wraps. */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 items-end">
             <div>
               <label className="glass-label">Orientation</label>
               <select name="orientation" defaultValue={g.orientation ?? 'vertical'} className="glass-input">
@@ -57,8 +71,8 @@ export default async function Step3({ params }: { params: Promise<{ quoteId: str
         </section>
 
         <section>
-          <h3 className="section-head">Heads &amp; bottom</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <h3 className="section-head">Heads &amp; Bottom</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
             <div>
               <label className="glass-label">Top head</label>
               <select name="topHead" defaultValue={g.topHead ?? 'F_AND_D'} className="glass-input">
@@ -80,10 +94,75 @@ export default async function Step3({ params }: { params: Promise<{ quoteId: str
           </div>
         </section>
 
+        <section>
+          <h3 className="section-head">Nozzles &amp; Connections</h3>
+          <p className="text-[13px] text-slate-500 mb-3 -mt-2">
+            Inlets, outlets, manways, vents, and instrument ports.
+          </p>
+          <NozzleSchedule initial={Array.isArray(g.nozzles) ? g.nozzles : []} />
+        </section>
+
+        <section>
+          <h3 className="section-head">Interior Baffles</h3>
+          <p className="text-[13px] text-slate-500 mb-3 -mt-2">
+            Common in agitated or mixed-flow service.
+          </p>
+          {/* items-center: toggle + inline label + input all sit on one
+              horizontal row, vertically centered. */}
+          <div className="flex flex-wrap items-center gap-4">
+            <label className={`toggle-pill ${g.baffles ? 'on' : ''}`}>
+              <input
+                type="checkbox"
+                name="baffles"
+                defaultChecked={!!g.baffles}
+              />
+              <span>Include Baffles</span>
+            </label>
+            {/* Label omitted — toggle already communicates what the number means. */}
+            <input
+              type="number"
+              min={0}
+              step={1}
+              name="baffleCount"
+              defaultValue={g.baffleCount ?? 4}
+              className="glass-input w-[96px]"
+              placeholder="4"
+              aria-label="Number of baffles"
+            />
+          </div>
+        </section>
+
+        <section>
+          <h3 className="section-head">Stainless-Steel Stand</h3>
+          <p className="text-[13px] text-slate-500 mb-3 -mt-2">
+            Structural SS stand or skirt in place of a concrete pad.
+          </p>
+          <div className="flex flex-wrap items-center gap-4">
+            <label className={`toggle-pill ${g.stainlessStand ? 'on' : ''}`}>
+              <input
+                type="checkbox"
+                name="stainlessStand"
+                defaultChecked={!!g.stainlessStand}
+              />
+              <span>Include Stand</span>
+            </label>
+            <select
+              name="stainlessGrade"
+              defaultValue={g.stainlessGrade ?? 'SS316'}
+              className="glass-input w-[240px]"
+              aria-label="Stainless grade"
+            >
+              {STAINLESS_LABEL.map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+        </section>
+
         <div className="flex justify-end pt-4 border-t border-slate-200/60">
           <button className="btn-glass-prominent">
-            Save and continue
-            <span aria-hidden>→</span>
+            Next
+            <ArrowRight className="w-4 h-4" strokeWidth={2.5} aria-hidden />
           </button>
         </div>
       </form>

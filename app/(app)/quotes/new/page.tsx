@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { createQuote } from '@/lib/actions/quotes';
+import { CustomerAutoSuggest } from '@/components/CustomerAutoSuggest';
+import { formatFormula } from '@/lib/format';
 
 /**
  * New Quote — workflow entry point.
@@ -50,10 +52,10 @@ export default async function NewQuote({
     <div className="max-w-3xl mx-auto space-y-6">
       <header>
         <Link href="/dashboard" className="text-[13px] text-slate-500 hover:text-slate-700">
-          ← Back to quotes
+          ← Back to Quotes
         </Link>
         <h1 className="text-[26px] font-semibold tracking-tight text-slate-900 mt-2">
-          Start a new quote
+          Start a New Quote
         </h1>
         <p className="text-[14px] text-slate-500 mt-1">
           Pick a customer and project. Once you continue, we&apos;ll create Revision A and drop you into the configurator.
@@ -70,7 +72,7 @@ export default async function NewQuote({
       </div>
 
       {/* ------------------------------ Step 1: customer ------------------------------ */}
-      <section className="glass-raised p-7">
+      <section className="glass-raised p-7 overflow-visible">
         <div className="flex items-baseline justify-between mb-4">
           <h2 className="section-head mb-0">① Customer</h2>
           {selectedCustomer && (
@@ -101,35 +103,24 @@ export default async function NewQuote({
             </p>
             <Link href="/customers" className="btn-glass-prominent">
               <span aria-hidden>+</span>
-              New customer
+              New Customer
             </Link>
           </div>
         ) : (
           <>
-            <ul className="space-y-2">
-              {customers.map((c) => (
-                <li key={c.id}>
-                  <Link
-                    href={`/quotes/new?customerId=${c.id}`}
-                    className="glass glass-interactive p-4 flex items-center justify-between gap-3 block"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-[15px] font-medium text-slate-900 truncate">{c.name}</div>
-                      <div className="text-[12.5px] text-slate-500 mt-0.5 truncate">
-                        {c.contactName ?? 'No contact'}
-                        {' · '}
-                        {c.projects.length} project{c.projects.length === 1 ? '' : 's'}
-                      </div>
-                    </div>
-                    <span className="text-slate-400 shrink-0 text-[18px]" aria-hidden>→</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+            <CustomerAutoSuggest
+              customers={customers.map((c) => ({
+                id: c.id,
+                name: c.name,
+                contactName: c.contactName,
+                contactEmail: c.contactEmail,
+                projectCount: c.projects.length,
+              }))}
+            />
             <div className="pt-4 mt-4 border-t border-slate-200/60 flex justify-between items-center">
-              <span className="text-[12.5px] text-slate-500">Don&apos;t see them?</span>
+              <span className="text-[12.5px] text-slate-500">Don&apos;t See Them?</span>
               <Link href="/customers" className="btn-glass text-[13px]">
-                + New customer
+                + New Customer
               </Link>
             </div>
           </>
@@ -141,6 +132,7 @@ export default async function NewQuote({
         <section className="glass-raised p-7">
           <div className="flex items-baseline justify-between mb-4">
             <h2 className="section-head mb-0">② Project</h2>
+            {/* section-head renders uppercase; source text kept title-case. */}
             {selectedProject && (
               <Link
                 href={`/quotes/new?customerId=${selectedCustomer.id}`}
@@ -154,7 +146,7 @@ export default async function NewQuote({
           {selectedProject ? (
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-[16px] font-semibold text-slate-900">{selectedProject.name}</div>
+                <div className="text-[16px] font-semibold text-slate-900">{formatFormula(selectedProject.name)}</div>
                 <div className="text-[13px] text-slate-500 mt-0.5">
                   Created {new Date(selectedProject.createdAt).toLocaleDateString()}
                 </div>
@@ -171,7 +163,7 @@ export default async function NewQuote({
                 className="btn-glass-prominent"
               >
                 <span aria-hidden>+</span>
-                New project for {selectedCustomer.name}
+                New Project for {selectedCustomer.name}
               </Link>
             </div>
           ) : (
@@ -184,7 +176,7 @@ export default async function NewQuote({
                       className="glass glass-interactive p-4 flex items-center justify-between gap-3 block"
                     >
                       <div className="min-w-0">
-                        <div className="text-[15px] font-medium text-slate-900 truncate">{p.name}</div>
+                        <div className="text-[15px] font-medium text-slate-900 truncate">{formatFormula(p.name)}</div>
                         <div className="text-[12.5px] text-slate-500 mt-0.5">
                           {new Date(p.createdAt).toLocaleDateString()}
                         </div>
@@ -195,12 +187,12 @@ export default async function NewQuote({
                 ))}
               </ul>
               <div className="pt-4 mt-4 border-t border-slate-200/60 flex justify-between items-center">
-                <span className="text-[12.5px] text-slate-500">New project?</span>
+                <span className="text-[12.5px] text-slate-500">New Project?</span>
                 <Link
                   href={`/customers/${selectedCustomer.id}`}
                   className="btn-glass text-[13px]"
                 >
-                  + New project
+                  + New Project
                 </Link>
               </div>
             </>
@@ -211,9 +203,9 @@ export default async function NewQuote({
       {/* ------------------------------ Step 3: start configuring ------------------------------ */}
       {selectedCustomer && selectedProject && (
         <section className="glass-raised p-7">
-          <h2 className="section-head mb-3">③ Ready to configure</h2>
+          <h2 className="section-head mb-3">③ Ready to Configure</h2>
           <p className="text-[14px] text-slate-600 mb-5">
-            We&apos;ll create a new quote (Rev A) for <strong>{selectedProject.name}</strong> under{' '}
+            We&apos;ll create a new quote (Rev A) for <strong>{formatFormula(selectedProject.name)}</strong> under{' '}
             <strong>{selectedCustomer.name}</strong>, then open the configurator so you can capture
             service conditions, certifications, geometry, and resin selection.
           </p>
@@ -228,7 +220,7 @@ export default async function NewQuote({
                 Cancel
               </Link>
               <button type="submit" className="btn-glass-prominent">
-                Open configurator
+                Open Configurator
                 <span aria-hidden>→</span>
               </button>
             </div>

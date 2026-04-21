@@ -74,9 +74,13 @@ model Customer {
   tenantId  String
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   name      String
+  // Primary (quick-access) contact — kept for backward compat with listings.
+  // The full contact roster lives in `contacts` (JSON) with at minimum the
+  // primary contact as its first entry.
   contactName  String?
   contactEmail String?
   contactPhone String?
+  contacts     Json?
   createdAt DateTime @default(now())
 
   projects  Project[]
@@ -89,6 +93,7 @@ model Project {
   customerId String
   customer   Customer @relation(fields: [customerId], references: [id])
   name       String
+  description String?
   customerProjectNumber String?
   siteAddress String?
   endUse     String?
@@ -117,6 +122,8 @@ model Quote {
 enum QuoteStatus {
   DRAFT
   SENT
+  ENGINEERING
+  BUILDING
   WON
   LOST
 }

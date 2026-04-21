@@ -54,16 +54,27 @@ html, body {
 }
 
 /* Ambient background — radial gradients so glass surfaces blur through color. */
-.pti-ambient {
-  position: relative;
-  min-height: 100vh;
+/* NOTE: no `background-attachment: fixed` — Safari cannot composite a child
+ * backdrop-filter over a fixed background, resulting in cloudy/unblurred glass
+ * surfaces. The gradient scrolls with content, which is fine because glass
+ * cards blur whatever's directly behind them locally. */
+body {
   background:
     radial-gradient(60% 80% at 10% 0%,   var(--ambient-4) 0%, transparent 60%),
     radial-gradient(50% 70% at 90% 10%,  var(--ambient-3) 0%, transparent 55%),
     radial-gradient(60% 60% at 80% 100%, var(--ambient-2) 0%, transparent 60%),
     radial-gradient(40% 50% at 0% 100%,  var(--ambient-1) 0%, transparent 65%),
     linear-gradient(180deg, #fafbfd 0%, #f4f6fa 100%);
-  background-attachment: fixed;
+  background-repeat: no-repeat;
+  min-height: 100vh;
+}
+.pti-ambient {
+  position: relative;
+  min-height: 100vh;
+  /* `isolation: isolate` creates a stacking context so child backdrop-filter
+   * effects composite against only the ambient layer, not the browser chrome.
+   * This is a required workaround for Safari on nested filtered surfaces. */
+  isolation: isolate;
 }
 
 /* Glass surfaces — three tiers: standard / raised / compact pill. */
@@ -105,7 +116,12 @@ html, body {
   font-weight: 500;
   line-height: 1;
   color: var(--pti-ink);
+  /* Override the near-invisible white border from the shared .glass/.glass-raised
+   * rule with a subtle slate edge so the chip's container reads on opaque parent
+   * cards (e.g. the resin detail card). Tinted variants override this again. */
+  border-color: rgba(15, 23, 42, 0.14);
 }
+
 
 /* Interactive glass — lifts + brightens on hover, presses on active. */
 .glass-interactive {
@@ -211,6 +227,38 @@ html, body {
   opacity: 0.5; cursor: not-allowed; transform: none; filter: none;
 }
 
+/* Secondary button — slate solid. Pairs with .btn-glass-prominent (amber
+ * primary). Use for secondary actions (Back, Cancel, alternate flows) or
+ * when an action needs weight but shouldn't compete with the primary CTA. */
+.btn-glass-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.375rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  border-radius: 999px;
+  color: white;
+  background-color: #334155; /* slate-700 */
+  border: 1px solid rgba(15, 23, 42, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+    0 1px 2px rgba(15, 23, 42, 0.25),
+    0 12px 28px -10px rgba(15, 23, 42, 0.35);
+  transition: all var(--duration-1) var(--ease-spring);
+  cursor: pointer;
+  text-decoration: none;
+}
+.btn-glass-secondary:hover {
+  background-color: #1e293b; /* slate-800 */
+  transform: translateY(-1px);
+}
+.btn-glass-secondary:active { transform: translateY(0) scale(0.98); }
+.btn-glass-secondary:disabled {
+  opacity: 0.5; cursor: not-allowed; transform: none;
+}
+
 /* Form controls — tight, glassy inputs. */
 .glass-input {
   width: 100%;
@@ -233,6 +281,39 @@ html, body {
   box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.18);
 }
 .glass-input::placeholder { color: var(--pti-subtle); }
+
+/* Normalize native <select> so Safari, Chrome, and Firefox all render the
+ * same chrome. Strip the OS-native chevron and paint our own via
+ * background-image so padding (-pr-N from Tailwind) has predictable effect. */
+select.glass-input {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 10px 6px;
+  padding-right: 2rem;
+}
+/* Firefox leaves a dotted focus outline inside selects unless we opt out. */
+select.glass-input:-moz-focusring { color: transparent; text-shadow: 0 0 0 var(--pti-ink); }
+
+/* Tight-padding select for narrow table columns (e.g. nozzle schedule). The
+ * default pr=2rem leaves too much empty space when the column is ≤90px and
+ * browsers end up cropping the value text. Shrink the chevron inset so all
+ * content fits with room to spare. */
+select.glass-input.glass-input-tight {
+  padding-left: 0.625rem;
+  padding-right: 1.375rem;
+  background-position: right 0.45rem center;
+}
+
+/* Backdrop-filter fallback — browsers without support (older Firefox LTS,
+ * very old Safari) get an opaque surface instead of the translucent glass. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass, .glass-raised, .glass-chip,
+  .btn-glass, .btn-glass-prominent, .glass-input { background-color: rgba(255, 255, 255, 0.96); }
+}
 
 .glass-label {
   display: block;
