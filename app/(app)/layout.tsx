@@ -1,12 +1,13 @@
 import { auth } from '@/lib/auth';
-import { redirect } from 'next/navigation';
 import { Nav } from '@/components/Nav';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  // Demo mode — `auth()` always resolves to the seeded demo admin. No
+  // sign-in redirect: see lib/auth.ts for the stub and the note on how
+  // to replace it before shipping real data.
   const session = await auth();
-  if (!session?.user?.email) redirect('/sign-in');
 
   return (
     <div className="pti-ambient">

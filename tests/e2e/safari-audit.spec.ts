@@ -12,12 +12,7 @@ import { test, expect } from '@playwright/test';
 test.use({ browserName: 'webkit' });
 
 test.describe('Safari compatibility audit', () => {
-  test.beforeEach(async ({ page }) => {
-    const res = await page.request.post('/api/test/login', {
-      data: { email: 'admin@frp-tank-quoter.local' },
-    });
-    expect(res.status()).toBe(200);
-  });
+  // Demo-mode auth — no login step required.
 
   test('dashboard — KPI strip, chart bars, recent quotes list render', async ({ page }) => {
     await page.goto('/dashboard');
