@@ -1,6 +1,17 @@
 import { db } from '@/lib/db';
 import type { Role } from '@prisma/client';
 
+/**
+ * Demo-mode auth.
+ *
+ * There is no real authentication in this build. Every request is served
+ * as the seeded demo admin (`dev@frp-tank-quoter.local`) so the deployed
+ * URL can be shared with reviewers without SMTP / OAuth / password setup.
+ *
+ * Replace this module with a real provider (NextAuth, Clerk, custom) before
+ * exposing real customer data.
+ */
+
 const DEV_TENANT_ID = 'mock-plas-tanks';
 const DEV_USER_EMAIL = 'dev@frp-tank-quoter.local';
 
@@ -17,7 +28,7 @@ async function ensureDevUser() {
     return await db.user.create({
       data: {
         email: DEV_USER_EMAIL,
-        name: 'Dev Admin',
+        name: 'Demo Admin',
         role: 'ADMIN',
         tenantId: DEV_TENANT_ID,
       },
@@ -39,19 +50,6 @@ export async function auth() {
     },
   };
 }
-
-export const signIn = async () => {
-  /* no-op — auth is stubbed */
-};
-
-export const signOut = async () => {
-  /* no-op — auth is stubbed */
-};
-
-export const handlers = {
-  GET: () => new Response('Auth disabled', { status: 501 }),
-  POST: () => new Response('Auth disabled', { status: 501 }),
-};
 
 export type SessionUser = {
   id: string;

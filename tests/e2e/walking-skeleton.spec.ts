@@ -10,11 +10,7 @@ import { test, expect } from '@playwright/test';
  * animation behavior that deserves dedicated component tests.
  */
 test('sales rep walks a seeded project through the wizard to the send step', async ({ page }) => {
-  const loginRes = await page.request.post('/api/test/login', {
-    data: { email: 'admin@frp-tank-quoter.local' },
-  });
-  expect(loginRes.status()).toBe(200);
-
+  // Demo-mode auth — no login step required.
   await page.goto('/projects/mock-proj-00-0');
   await expect(page.locator('h1').first()).toBeVisible();
   await page.click('button:has-text("New Quote")');
