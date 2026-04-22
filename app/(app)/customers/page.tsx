@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { listCustomers } from '@/lib/actions/customers';
 import { NewCustomerModal } from '@/components/NewCustomerModal';
+import { BatchUploadContactsModal } from '@/components/BatchUploadContactsModal';
 import { formatPhone } from '@/lib/format';
 
 export default async function Customers() {
@@ -18,7 +19,10 @@ export default async function Customers() {
             All buyers with active or historical quotes.
           </p>
         </div>
-        <NewCustomerModal />
+        <div className="flex items-center gap-3">
+          <BatchUploadContactsModal />
+          <NewCustomerModal />
+        </div>
       </header>
 
       {customers.length === 0 ? (
