@@ -5,8 +5,16 @@ import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { customerCreateSchema, contactSchema, type Contact } from '@/lib/validators/entities';
 import { writeAuditEntry } from '@/lib/audit/audit-log';
+import { normalizePhone } from '@/lib/format';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+
+// Phones come off forms in whatever shape a rep typed — `(555) 123.4567`,
+// `5551234567`, `+1-555-123-4567`. We canonicalize on the way in so the
+// DB (and every downstream read) is consistent.
+function normalizeContacts(list: Contact[]): Contact[] {
+  return list.map((c) => ({ ...c, phone: normalizePhone(c.phone) }));
+}
 
 async function getSessionUser() {
   const session = await auth();
@@ -15,9 +23,7 @@ async function getSessionUser() {
   return user as { id: string; tenantId: string; role: 'SALES' | 'ENGINEER' | 'ADMIN' };
 }
 
-export async function createCustomer(formData: FormData) {
-  const user = await getSessionUser();
-
+function parseCustomerForm(formData: FormData) {
   // Contacts come through as a JSON-serialized hidden field from the modal's
   // expandable contact rows. Fall back to single-contact fields if present
   // (backward compat for any callers still wiring the old shape).
@@ -38,13 +44,18 @@ export async function createCustomer(formData: FormData) {
       }];
     }
   }
-
-  const parsed = customerCreateSchema.parse({
+  return customerCreateSchema.parse({
     name: formData.get('name'),
     contacts: contactsRaw,
   });
+}
 
-  const primary = parsed.contacts[0];
+export async function createCustomer(formData: FormData) {
+  const user = await getSessionUser();
+  const parsed = parseCustomerForm(formData);
+  const contacts = normalizeContacts(parsed.contacts);
+
+  const primary = contacts[0];
   const customer = await db.customer.create({
     data: {
       tenantId: user.tenantId,
@@ -54,7 +65,7 @@ export async function createCustomer(formData: FormData) {
       contactName: primary.name,
       contactEmail: primary.email || null,
       contactPhone: primary.phone || null,
-      contacts: parsed.contacts as unknown as object,
+      contacts: contacts as unknown as object,
     },
   });
 
@@ -68,6 +79,60 @@ export async function createCustomer(formData: FormData) {
 
   revalidatePath('/customers');
   redirect(`/customers/${customer.id}`);
+}
+
+/**
+ * Create a customer and immediately start a quote for them (projectless),
+ * redirecting to the wizard. Used by the new-quote page's inline
+ * "New Customer" modal so the rep doesn't have to visit /customers first.
+ */
+export async function createCustomerAndQuote(formData: FormData) {
+  const user = await getSessionUser();
+  const parsed = parseCustomerForm(formData);
+  const contacts = normalizeContacts(parsed.contacts);
+  const primary = contacts[0];
+
+  const customer = await db.customer.create({
+    data: {
+      tenantId: user.tenantId,
+      name: parsed.name,
+      contactName: primary.name,
+      contactEmail: primary.email || null,
+      contactPhone: primary.phone || null,
+      contacts: contacts as unknown as object,
+    },
+  });
+
+  await writeAuditEntry(db, {
+    entityType: 'Customer',
+    entityId: customer.id,
+    actorUserId: user.id,
+    action: 'create',
+    diffJson: parsed,
+  });
+
+  const y = new Date().getFullYear();
+  const quote = await db.quote.create({
+    data: {
+      customerId: customer.id,
+      number: `Q-${y}-${Math.floor(Math.random() * 9000) + 1000}`,
+    },
+  });
+  const rev = await db.revision.create({
+    data: { quoteId: quote.id, label: 'A' },
+  });
+
+  await writeAuditEntry(db, {
+    entityType: 'Quote',
+    entityId: quote.id,
+    revisionId: rev.id,
+    actorUserId: user.id,
+    action: 'create',
+    diffJson: { number: quote.number, customerId: customer.id, via: 'new-customer-modal' },
+  });
+
+  revalidatePath('/customers');
+  redirect(`/quotes/${quote.id}/rev/${rev.label}/step-1`);
 }
 
 export async function listCustomers() {
@@ -95,7 +160,9 @@ export async function addContactsToCustomer(formData: FormData) {
   } catch {
     rawContacts = [];
   }
-  const newContacts = z.array(contactSchema).min(1).parse(rawContacts);
+  const newContacts = normalizeContacts(
+    z.array(contactSchema).min(1).parse(rawContacts),
+  );
 
   const customer = await db.customer.findUnique({ where: { id: customerId } });
   if (!customer || customer.tenantId !== user.tenantId) {

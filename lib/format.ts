@@ -27,3 +27,21 @@ export function formatFormula(input: string | null | undefined): string {
     return letter + subscripted;
   });
 }
+
+// Phone helpers now live in `@/lib/phone` — re-exported here so existing
+// callers of `formatPhone` / `normalizePhone` keep working. New code
+// should import directly from `@/lib/phone`.
+export { formatPhone, normalizePhone } from '@/lib/phone';
+
+// Whole-dollar, comma-grouped formatter: `127000 → "$127,000"`. Used on
+// the dashboard and anywhere we want full precision instead of `$127k`.
+const USD = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0,
+});
+
+export function formatUSD(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return '$0';
+  return USD.format(Math.round(value));
+}

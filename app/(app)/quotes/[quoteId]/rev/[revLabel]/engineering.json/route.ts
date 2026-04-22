@@ -16,9 +16,9 @@ export async function GET(
 
   const rev = await db.revision.findUnique({
     where: { quoteId_label: { quoteId, label: revLabel } },
-    include: { quote: { include: { project: { include: { customer: true } } } } },
+    include: { quote: { include: { customer: true, project: true } } },
   });
-  if (!rev || rev.quote.project.customer.tenantId !== user.tenantId) {
+  if (!rev || rev.quote.customer.tenantId !== user.tenantId) {
     return new NextResponse('Not found', { status: 404 });
   }
 

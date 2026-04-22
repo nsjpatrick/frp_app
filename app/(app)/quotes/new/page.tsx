@@ -4,24 +4,21 @@ import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { createQuote } from '@/lib/actions/quotes';
 import { CustomerAutoSuggest } from '@/components/CustomerAutoSuggest';
+import { NewCustomerQuoteModal } from '@/components/NewCustomerQuoteModal';
 import { formatFormula } from '@/lib/format';
 
 /**
  * New Quote — workflow entry point.
  *
- * A two-step intake before the configurator wizard proper:
- *   1. Customer   — pick from existing, or link out to create a new one.
- *   2. Project    — pick from existing projects under the chosen customer.
- *   3. Submit     — creates Quote + Revision A, redirects into wizard Step 1.
+ * Three-step intake (step 2 is optional):
+ *   1. Customer — pick from existing, or spawn a new one via inline modal
+ *      (the modal creates customer + quote + rev A in one shot).
+ *   2. Project  — OPTIONAL. Sales often starts a quote before a project
+ *      record exists, so "Continue without project" is first-class.
+ *   3. Submit   — creates Quote + Revision A, redirects into wizard Step 1.
  *
  * Step state lives in the URL via `customerId` / `projectId` search params —
  * refreshable, shareable, and no client-side state needed.
- *
- * Intentionally minimal first cut. Future iterations (per user request):
- *   - Inline "create customer / project" without leaving this page
- *   - Import from prior-won quote ("quote this like last year's job")
- *   - Kickoff questions before entering the configurator (RFI source, urgency)
- *   - Preset templates (standard 5k gal sulfuric, standard 10k gal caustic, ...)
  */
 
 export default async function NewQuote({
@@ -34,7 +31,6 @@ export default async function NewQuote({
   const user = session?.user as any;
   if (!user?.tenantId) notFound();
 
-  // Load customers for this tenant (always — so we can render the picker).
   const customers = await db.customer.findMany({
     where: { tenantId: user.tenantId },
     orderBy: { name: 'asc' },
@@ -51,14 +47,14 @@ export default async function NewQuote({
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <header>
-        <Link href="/dashboard" className="text-[13px] text-slate-500 hover:text-slate-700">
+        <Link href="/quotes" className="text-[13px] text-slate-500 hover:text-slate-700">
           ← Back to Quotes
         </Link>
         <h1 className="text-[26px] font-semibold tracking-tight text-slate-900 mt-2">
           Start a New Quote
         </h1>
         <p className="text-[14px] text-slate-500 mt-1">
-          Pick a customer and project. Once you continue, we&apos;ll create Revision A and drop you into the configurator.
+          Pick a customer. Projects are optional — you can attach one now or skip straight into the configurator.
         </p>
       </header>
 
@@ -66,7 +62,7 @@ export default async function NewQuote({
       <div className="glass p-3 flex items-center gap-2 text-[13px]">
         <StepDot n={1} label="Customer" active={activeStep >= 1} done={activeStep > 1} />
         <Connector done={activeStep > 1} />
-        <StepDot n={2} label="Project" active={activeStep >= 2} done={activeStep > 2} />
+        <StepDot n={2} label="Project (optional)" active={activeStep >= 2} done={activeStep > 2} />
         <Connector done={activeStep > 2} />
         <StepDot n={3} label="Configure" active={activeStep >= 3} done={false} />
       </div>
@@ -99,12 +95,12 @@ export default async function NewQuote({
         ) : customers.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-[14px] text-slate-500 mb-4">
-              No customers yet. Create one to start quoting.
+              No customers yet. Add one to start quoting.
             </p>
-            <Link href="/customers" className="btn-glass-prominent">
-              <span aria-hidden>+</span>
-              New Customer
-            </Link>
+            <NewCustomerQuoteModal
+              triggerLabel="+ New Customer"
+              triggerClassName="btn-glass-prominent"
+            />
           </div>
         ) : (
           <>
@@ -119,20 +115,17 @@ export default async function NewQuote({
             />
             <div className="pt-4 mt-4 border-t border-slate-200/60 flex justify-between items-center">
               <span className="text-[12.5px] text-slate-500">Don&apos;t See Them?</span>
-              <Link href="/customers" className="btn-glass text-[13px]">
-                + New Customer
-              </Link>
+              <NewCustomerQuoteModal />
             </div>
           </>
         )}
       </section>
 
-      {/* ------------------------------ Step 2: project ------------------------------ */}
+      {/* ------------------------------ Step 2: project (optional) ------------------------------ */}
       {selectedCustomer && (
         <section className="glass-raised p-7">
           <div className="flex items-baseline justify-between mb-4">
-            <h2 className="section-head mb-0">② Project</h2>
-            {/* section-head renders uppercase; source text kept title-case. */}
+            <h2 className="section-head mb-0">② Project <span className="normal-case text-[11px] font-medium text-slate-400 ml-1">(optional)</span></h2>
             {selectedProject && (
               <Link
                 href={`/quotes/new?customerId=${selectedCustomer.id}`}
@@ -153,47 +146,61 @@ export default async function NewQuote({
               </div>
               <span className="glass-chip glass-tinted-emerald">✓ Selected</span>
             </div>
-          ) : selectedCustomer.projects.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-[14px] text-slate-500 mb-4">
-                {selectedCustomer.name} has no projects yet. Create one to continue.
-              </p>
-              <Link
-                href={`/customers/${selectedCustomer.id}`}
-                className="btn-glass-prominent"
-              >
-                <span aria-hidden>+</span>
-                New Project for {selectedCustomer.name}
-              </Link>
-            </div>
           ) : (
             <>
-              <ul className="space-y-2">
-                {selectedCustomer.projects.map((p) => (
-                  <li key={p.id}>
-                    <Link
-                      href={`/quotes/new?customerId=${selectedCustomer.id}&projectId=${p.id}`}
-                      className="glass glass-interactive p-4 flex items-center justify-between gap-3 block"
-                    >
-                      <div className="min-w-0">
-                        <div className="text-[15px] font-medium text-slate-900 truncate">{formatFormula(p.name)}</div>
-                        <div className="text-[12.5px] text-slate-500 mt-0.5">
-                          {new Date(p.createdAt).toLocaleDateString()}
-                        </div>
-                      </div>
-                      <span className="text-slate-400 shrink-0 text-[18px]" aria-hidden>→</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              <div className="pt-4 mt-4 border-t border-slate-200/60 flex justify-between items-center">
-                <span className="text-[12.5px] text-slate-500">New Project?</span>
-                <Link
-                  href={`/customers/${selectedCustomer.id}`}
-                  className="btn-glass text-[13px]"
-                >
-                  + New Project
-                </Link>
+              {selectedCustomer.projects.length === 0 ? (
+                <p className="text-[13.5px] text-slate-500 mb-4">
+                  {selectedCustomer.name} has no projects yet. You can skip ahead, or create one first.
+                </p>
+              ) : (
+                <>
+                  <p className="text-[12.5px] text-slate-500 mb-3">
+                    Attach this quote to an existing project:
+                  </p>
+                  <ul className="space-y-2">
+                    {selectedCustomer.projects.map((p) => (
+                      <li key={p.id}>
+                        <Link
+                          href={`/quotes/new?customerId=${selectedCustomer.id}&projectId=${p.id}`}
+                          className="glass glass-interactive p-4 flex items-center justify-between gap-3 block"
+                        >
+                          <div className="min-w-0">
+                            <div className="text-[15px] font-medium text-slate-900 truncate">{formatFormula(p.name)}</div>
+                            <div className="text-[12.5px] text-slate-500 mt-0.5">
+                              {new Date(p.createdAt).toLocaleDateString()}
+                            </div>
+                          </div>
+                          <span className="text-slate-400 shrink-0 text-[18px]" aria-hidden>→</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+
+              {/* Skip-project CTA — first-class path, not a tucked-away afterthought. */}
+              <div className="pt-4 mt-4 border-t border-slate-200/60 flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div className="text-[13.5px] font-medium text-slate-700">No project? That&apos;s fine.</div>
+                  <div className="text-[12px] text-slate-500 mt-0.5">
+                    You can always attach one later from the quote detail page.
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Link
+                    href={`/customers/${selectedCustomer.id}`}
+                    className="text-[12.5px] text-slate-500 hover:text-slate-700"
+                  >
+                    + New project
+                  </Link>
+                  <form action={createQuote}>
+                    <input type="hidden" name="customerId" value={selectedCustomer.id} />
+                    <button type="submit" className="btn-glass-prominent">
+                      Continue Without Project
+                      <span aria-hidden>→</span>
+                    </button>
+                  </form>
+                </div>
               </div>
             </>
           )}

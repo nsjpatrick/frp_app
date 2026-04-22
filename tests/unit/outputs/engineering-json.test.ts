@@ -2,7 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { buildEngineeringJson } from '@/lib/outputs/engineering-json';
 
 const fixture = {
-  quote: { id: 'q1', number: 'Q-2026-0001', project: { id: 'p1', name: 'Test', customer: { id: 'c1', name: 'Acme', contactName: 'Jane', contactEmail: 'j@acme', contactPhone: '555' }, siteAddress: '123 Main', endUse: 'storage', needByDate: null } },
+  quote: {
+    id: 'q1',
+    number: 'Q-2026-0001',
+    customer: { id: 'c1', name: 'Acme', contactName: 'Jane', contactEmail: 'j@acme', contactPhone: '555' },
+    project: { id: 'p1', name: 'Test', siteAddress: '123 Main', endUse: 'storage', needByDate: null },
+  },
   revision: {
     id: 'r1',
     label: 'A',

@@ -84,6 +84,7 @@ model Customer {
   createdAt DateTime @default(now())
 
   projects  Project[]
+  quotes    Quote[]
 
   @@index([tenantId])
 }
@@ -105,18 +106,36 @@ model Project {
   @@index([customerId])
 }
 
+// Note: Customer ↔ Quote is a new back-relation — projectless quotes are
+// attached directly to a customer. Kept alongside the project linkage so
+// tenant queries can pivot on customer regardless of project presence.
+
 model Quote {
   id         String   @id @default(cuid())
-  projectId  String
-  project    Project  @relation(fields: [projectId], references: [id])
+  // Nullable — not every quote is tied to a formal project record. Sales
+  // often starts a quote against a customer before the project exists.
+  projectId  String?
+  project    Project? @relation(fields: [projectId], references: [id])
+  // Customer scope is always required — even project-less quotes need a
+  // tenant-bound customer so tenant checks + listings keep working.
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
   number     String   @unique
   status     QuoteStatus @default(DRAFT)
+  // Quoted price (USD). Nullable — set when the sales rep sends the quote
+  // or marks it WON, not required on draft rows.
+  totalPrice Float?
+  // Timestamp of status→WON transition. Indexed for the YTD revenue graph
+  // on the dashboard; avoids rescanning AuditLog to derive close dates.
+  wonAt      DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   revisions  Revision[]
 
   @@index([projectId])
+  @@index([customerId])
+  @@index([wonAt])
 }
 
 enum QuoteStatus {

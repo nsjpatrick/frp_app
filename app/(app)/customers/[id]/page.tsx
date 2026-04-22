@@ -6,6 +6,7 @@ import { auth } from '@/lib/auth';
 import { NewProjectModal } from '@/components/NewProjectModal';
 import { AddContactModal } from '@/components/AddContactModal';
 import { formatFormula } from '@/lib/format';
+import { formatPhone, telHref } from '@/lib/phone';
 
 const STATUS_STYLE: Record<string, string> = {
   DRAFT:        'glass-chip',
@@ -216,11 +217,11 @@ function ContactCard({ contact, primary }: { contact: Contact; primary: boolean 
         )}
         {contact.phone ? (
           <a
-            href={`tel:${contact.phone}`}
+            href={`tel:${telHref(contact.phone)}`}
             className="flex items-center gap-2 text-slate-600 hover:text-amber-700 transition-colors group"
           >
             <Phone className="w-3.5 h-3.5 text-slate-400 group-hover:text-amber-600" aria-hidden />
-            <span className="font-mono tabular-nums">{contact.phone}</span>
+            <span className="font-mono tabular-nums">{formatPhone(contact.phone)}</span>
           </a>
         ) : (
           <div className="flex items-center gap-2 text-slate-400">

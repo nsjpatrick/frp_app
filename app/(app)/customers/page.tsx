@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { listCustomers } from '@/lib/actions/customers';
 import { NewCustomerModal } from '@/components/NewCustomerModal';
+import { formatPhone } from '@/lib/format';
 
 export default async function Customers() {
   const customers = await listCustomers();
@@ -103,7 +104,9 @@ export default async function Customers() {
                         )}
                       </td>
                       <td className="px-5 py-3 text-slate-500 text-[13px] font-mono tabular-nums">
-                        {c.contactPhone ?? (
+                        {c.contactPhone ? (
+                          formatPhone(c.contactPhone)
+                        ) : (
                           <span className="text-slate-400 font-sans">—</span>
                         )}
                       </td>
