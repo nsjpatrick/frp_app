@@ -17,9 +17,9 @@ async function getUser() {
 async function loadRevision(quoteId: string, label: string, tenantId: string) {
   const rev = await db.revision.findUnique({
     where: { quoteId_label: { quoteId, label } },
-    include: { quote: { include: { project: { include: { customer: true } } } } },
+    include: { quote: { include: { customer: true } } },
   });
-  if (!rev || rev.quote.project.customer.tenantId !== tenantId) throw new Error('not found');
+  if (!rev || rev.quote.customer.tenantId !== tenantId) throw new Error('not found');
   return rev;
 }
 
@@ -28,6 +28,7 @@ export async function saveServiceStep(quoteId: string, label: string, formData: 
   const rev = await loadRevision(quoteId, label, user.tenantId);
 
   const service = serviceConditionsSchema.parse({
+    tankType: formData.get('tankType') ? String(formData.get('tankType')) : undefined,
     chemical: formData.get('chemical'),
     chemicalFamily: formData.get('chemicalFamily'),
     concentrationPct: formData.get('concentrationPct') ? Number(formData.get('concentrationPct')) : undefined,
@@ -67,7 +68,7 @@ export async function saveServiceStep(quoteId: string, label: string, formData: 
   });
 
   await recomputeStructuralAnalysis(rev.id);
-  redirect(`/quotes/${quoteId}/rev/${label}/step-3`);
+  redirect(`/quotes/${quoteId}/rev/${label}/step-2`);
 }
 
 export async function saveGeometryStep(quoteId: string, label: string, formData: FormData) {
@@ -108,7 +109,7 @@ export async function saveGeometryStep(quoteId: string, label: string, formData:
   });
 
   await recomputeStructuralAnalysis(rev.id);
-  redirect(`/quotes/${quoteId}/rev/${label}/step-4`);
+  redirect(`/quotes/${quoteId}/rev/${label}/step-3`);
 }
 
 export async function saveResinStep(quoteId: string, label: string, formData: FormData) {

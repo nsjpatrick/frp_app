@@ -38,6 +38,10 @@ export const quoteCreateSchema = z.object({
 });
 
 export const serviceConditionsSchema = z.object({
+  // Product family being quoted (FRP vessel, Bryneer, scrubber, storage…).
+  // Optional for backwards compat with revisions captured before the tank-
+  // type selector existed; new quotes set it on the Service step.
+  tankType: z.string().min(1).optional(),
   chemical: z.string().min(1),
   chemicalFamily: z.string(),
   concentrationPct: z.number().min(0).max(100).optional(),

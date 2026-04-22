@@ -17,17 +17,48 @@ function quoteNumber(): string {
   return `Q-${y}-${rand}`;
 }
 
+/**
+ * Create a new Quote (+ Revision A) and redirect into the wizard.
+ *
+ * Accepts either `projectId` (existing flow) or `customerId` (project-less
+ * quote). When both are given, projectId wins and customerId is re-derived
+ * from the project to guarantee consistency.
+ */
 export async function createQuote(formData: FormData) {
   const user = await getUser();
-  const projectId = String(formData.get('projectId'));
-  const project = await db.project.findUnique({
-    where: { id: projectId },
-    include: { customer: true },
-  });
-  if (!project || project.customer.tenantId !== user.tenantId) throw new Error('not found');
+
+  const projectIdRaw = formData.get('projectId');
+  const customerIdRaw = formData.get('customerId');
+  const projectId = projectIdRaw ? String(projectIdRaw) : null;
+  let customerId = customerIdRaw ? String(customerIdRaw) : null;
+
+  if (!projectId && !customerId) {
+    throw new Error('customerId or projectId required');
+  }
+
+  // Resolve + tenant-check both the customer and (optional) project.
+  if (projectId) {
+    const project = await db.project.findUnique({
+      where: { id: projectId },
+      include: { customer: true },
+    });
+    if (!project || project.customer.tenantId !== user.tenantId) {
+      throw new Error('project not found');
+    }
+    customerId = project.customerId;
+  } else {
+    const customer = await db.customer.findUnique({ where: { id: customerId! } });
+    if (!customer || customer.tenantId !== user.tenantId) {
+      throw new Error('customer not found');
+    }
+  }
 
   const quote = await db.quote.create({
-    data: { projectId, number: quoteNumber() },
+    data: {
+      projectId,
+      customerId: customerId!,
+      number: quoteNumber(),
+    },
   });
 
   const rev = await db.revision.create({
@@ -40,7 +71,7 @@ export async function createQuote(formData: FormData) {
     revisionId: rev.id,
     actorUserId: user.id,
     action: 'create',
-    diffJson: { number: quote.number },
+    diffJson: { number: quote.number, projectId, customerId },
   });
 
   redirect(`/quotes/${quote.id}/rev/${rev.label}/step-1`);

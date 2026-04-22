@@ -11,14 +11,14 @@ export function buildEngineeringJson(
     quote: {
       id: string;
       number: string;
+      customer: { id: string; name: string; contactName?: string | null; contactEmail?: string | null; contactPhone?: string | null };
       project: {
         id: string;
         name: string;
-        customer: { id: string; name: string; contactName?: string | null; contactEmail?: string | null; contactPhone?: string | null };
         siteAddress?: string | null;
         endUse?: string | null;
         needByDate?: Date | null;
-      };
+      } | null;
     };
     revision: {
       id: string;
@@ -35,7 +35,7 @@ export function buildEngineeringJson(
 ) {
   const rev = src.revision;
   const proj = src.quote.project;
-  const cust = proj.customer;
+  const cust = src.quote.customer;
 
   return {
     schema_version: '1.0.0',
@@ -51,14 +51,17 @@ export function buildEngineeringJson(
       contact_email: cust.contactEmail ?? null,
       contact_phone: cust.contactPhone ?? null,
     },
-    project: {
-      name: proj.name,
-      site_address: proj.siteAddress ?? null,
-      end_use: proj.endUse ?? null,
-      need_by_date: proj.needByDate ? proj.needByDate.toISOString() : null,
-    },
+    project: proj
+      ? {
+          name: proj.name,
+          site_address: proj.siteAddress ?? null,
+          end_use: proj.endUse ?? null,
+          need_by_date: proj.needByDate ? proj.needByDate.toISOString() : null,
+        }
+      : null,
 
     service: {
+      tank_type: rev.service.tankType ?? null,
       chemical: rev.service.chemical,
       chemical_family: rev.service.chemicalFamily,
       concentration_pct: rev.service.concentrationPct ?? null,

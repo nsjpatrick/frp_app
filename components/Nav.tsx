@@ -6,7 +6,8 @@ import { usePathname } from 'next/navigation';
 import { User } from 'lucide-react';
 
 const LINKS = [
-  { href: '/dashboard', label: 'Quotes' },
+  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/quotes', label: 'Quotes' },
   { href: '/customers', label: 'Customers' },
 ];
 
@@ -33,9 +34,12 @@ export function Nav({ userEmail }: { userEmail: string }) {
           </Link>
           <div className="flex items-center gap-1 ml-2">
             {LINKS.map((l) => {
+              // Dashboard only matches exact path (otherwise /dashboard would
+              // also highlight on /quotes). /quotes and /customers use
+              // startsWith so their detail routes also show active state.
               const active =
                 l.href === '/dashboard'
-                  ? pathname === '/dashboard' || pathname.startsWith('/quotes')
+                  ? pathname === '/dashboard'
                   : pathname.startsWith(l.href);
               return (
                 <Link

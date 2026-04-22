@@ -2,11 +2,11 @@ import Link from 'next/link';
 import { LiveSummaryMock } from './LiveSummaryMock';
 
 const STEPS = [
-  { n: 1, label: 'Customer & Project', path: 'step-1' },
-  { n: 2, label: 'Service & Certifications', path: 'step-2' },
-  { n: 3, label: 'Geometry', path: 'step-3' },
-  { n: 4, label: 'Resin & Wall Buildup', path: 'step-4' },
-  { n: 5, label: 'Review & Generate', path: 'review' },
+  { n: 1, label: 'Service & Certifications', path: 'step-1' },
+  { n: 2, label: 'Geometry',                 path: 'step-2' },
+  { n: 3, label: 'Resin & Wall Buildup',     path: 'step-3' },
+  { n: 4, label: 'Review & Generate',        path: 'review' },
+  { n: 5, label: 'Customer & Project',       path: 'send' },
 ];
 
 function stateFor(currentPath: string, stepPath: string): 'completed' | 'current' | 'upcoming' {

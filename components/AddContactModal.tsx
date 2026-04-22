@@ -2,18 +2,15 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
-import { UserPlus, X, Plus, Trash2 } from 'lucide-react';
+import { UserPlus, X } from 'lucide-react';
 import { addContactsToCustomer } from '@/lib/actions/customers';
+import { ContactsEditor, EMPTY_CONTACT, type ContactRow } from '@/components/ContactsEditor';
 
 /**
  * AddContactModal — appends one or more contacts to an existing customer.
- * Reuses the same expandable-row editor from NewCustomerModal, same portal
- * + backdrop rendering, same Safari-safe inline-style overlay. Trigger is
- * a secondary (slate) button to pair with the amber "New Project" primary.
+ * Uses the shared ContactsEditor so the country-code dropdown + phone
+ * layout stays identical to the other customer modals.
  */
-
-type ContactRow = { name: string; email: string; phone: string };
-const EMPTY_CONTACT: ContactRow = { name: '', email: '', phone: '' };
 
 export function AddContactModal({
   customerId,
@@ -49,12 +46,6 @@ export function AddContactModal({
 
   const reset = () => setContacts([{ ...EMPTY_CONTACT }]);
   const close = () => { setOpen(false); reset(); };
-
-  const addContact = () => setContacts((c) => [...c, { ...EMPTY_CONTACT }]);
-  const removeContact = (idx: number) =>
-    setContacts((c) => (c.length > 1 ? c.filter((_, i) => i !== idx) : c));
-  const updateContact = (idx: number, patch: Partial<ContactRow>) =>
-    setContacts((c) => c.map((row, i) => (i === idx ? { ...row, ...patch } : row)));
 
   const canSubmit = contacts[0]?.name.trim().length > 0;
 
@@ -126,76 +117,11 @@ export function AddContactModal({
                 <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 min-h-0">
                   <input type="hidden" name="customerId" value={customerId} />
 
-                  <div>
-                    <div className="flex items-baseline justify-between mb-2">
-                      <span className="glass-label mb-0">Contacts</span>
-                      <span className="text-[11px] text-slate-400">
-                        One name per row
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-[1fr_1fr_140px_36px] gap-2 px-1 pb-1.5">
-                      <span className="text-[10px] font-semibold tracking-widest uppercase text-slate-400">Name</span>
-                      <span className="text-[10px] font-semibold tracking-widest uppercase text-slate-400">Email</span>
-                      <span className="text-[10px] font-semibold tracking-widest uppercase text-slate-400">Phone</span>
-                      <span />
-                    </div>
-
-                    <div className="space-y-2">
-                      {contacts.map((c, idx) => (
-                        <div
-                          key={idx}
-                          className="grid grid-cols-[1fr_1fr_140px_36px] gap-2 items-center"
-                        >
-                          <input
-                            type="text"
-                            value={c.name}
-                            onChange={(e) => updateContact(idx, { name: e.target.value })}
-                            placeholder="Jane Doe"
-                            required={idx === 0}
-                            className="glass-input"
-                            aria-label={`Contact ${idx + 1} name`}
-                          />
-                          <input
-                            type="email"
-                            value={c.email}
-                            onChange={(e) => updateContact(idx, { email: e.target.value })}
-                            placeholder="jane@acme.com"
-                            className="glass-input"
-                            aria-label={`Contact ${idx + 1} email`}
-                          />
-                          <input
-                            type="tel"
-                            value={c.phone}
-                            onChange={(e) => updateContact(idx, { phone: e.target.value })}
-                            placeholder="555-0100"
-                            className="glass-input"
-                            aria-label={`Contact ${idx + 1} phone`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeContact(idx)}
-                            disabled={contacts.length === 1}
-                            aria-label="Remove contact"
-                            className="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" aria-hidden />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="mt-3">
-                      <button
-                        type="button"
-                        onClick={addContact}
-                        className="btn-glass text-[13px]"
-                      >
-                        <Plus className="w-4 h-4" strokeWidth={2.5} aria-hidden />
-                        Add Contact
-                      </button>
-                    </div>
-                  </div>
+                  <ContactsEditor
+                    contacts={contacts}
+                    onChange={setContacts}
+                    primaryLabel="One name per row"
+                  />
 
                   <input
                     type="hidden"

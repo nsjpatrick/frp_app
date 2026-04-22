@@ -1,51 +1,75 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, X } from 'lucide-react';
-import { createCustomer } from '@/lib/actions/customers';
+import { X, ArrowRight } from 'lucide-react';
+import { createCustomerAndQuote } from '@/lib/actions/customers';
 import { ContactsEditor, EMPTY_CONTACT, type ContactRow } from '@/components/ContactsEditor';
 
 /**
- * NewCustomerModal — opens from the Customers page header as the amber
- * prominent CTA. Captures the company name plus one-or-more contacts
- * (name + email + country-scoped phone) via the shared ContactsEditor.
- * Submits via the existing `createCustomer` server action.
+ * NewCustomerQuoteModal — inline "New Customer" flow on the start-a-quote
+ * page. Same expandable-contacts UX as the dashboard's NewCustomerModal,
+ * but on save the server action creates the customer AND a fresh (project-
+ * less) quote, then redirects straight into the configurator wizard.
  */
 
-export function NewCustomerModal() {
+export function NewCustomerQuoteModal({
+  triggerLabel = '+ New Customer',
+  triggerClassName = 'btn-glass text-[13px]',
+}: {
+  triggerLabel?: string;
+  triggerClassName?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [company, setCompany] = useState('');
   const [contacts, setContacts] = useState<ContactRow[]>([{ ...EMPTY_CONTACT }]);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !pending) setOpen(false); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, [open, pending]);
 
   const reset = () => {
     setCompany('');
     setContacts([{ ...EMPTY_CONTACT }]);
+    setError(null);
   };
   const close = () => { setOpen(false); reset(); };
+
+  const canSubmit = company.trim().length > 0 && contacts[0]?.name.trim().length > 0;
+
+  const handleAction = (formData: FormData) => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await createCustomerAndQuote(formData);
+      } catch (e) {
+        if (e && typeof e === 'object' && 'digest' in e && String((e as any).digest).startsWith('NEXT_REDIRECT')) {
+          return;
+        }
+        setError(e instanceof Error ? e.message : 'Could not save.');
+      }
+    });
+  };
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="btn-glass-prominent"
+        className={triggerClassName}
       >
-        <Plus className="w-4 h-4" strokeWidth={2.5} aria-hidden />
-        New Customer
+        {triggerLabel}
       </button>
 
       {open && typeof document !== 'undefined' && createPortal(
         <>
           <div
-            onClick={close}
+            onClick={() => !pending && close()}
             aria-hidden
             style={{
               position: 'fixed',
@@ -58,7 +82,7 @@ export function NewCustomerModal() {
             className="flex items-center justify-center p-4 pointer-events-none"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="new-customer-title"
+            aria-labelledby="new-customer-quote-title"
             style={{
               position: 'fixed',
               top: 0, right: 0, bottom: 0, left: 0,
@@ -72,36 +96,37 @@ export function NewCustomerModal() {
                   '0 30px 80px -20px rgba(15, 23, 42, 0.55), 0 4px 12px rgba(15, 23, 42, 0.10)',
               }}
             >
-              <form action={createCustomer} className="flex flex-col overflow-hidden">
-                <div className="flex items-center justify-between gap-3 px-6 py-5 border-b border-slate-200">
+              <form action={handleAction} className="flex-1 flex flex-col min-h-0">
+                <div className="flex items-center justify-between gap-3 px-6 py-5 border-b border-slate-200 shrink-0">
                   <div>
                     <h3
-                      id="new-customer-title"
+                      id="new-customer-quote-title"
                       className="text-[17px] font-semibold tracking-tight text-slate-900"
                     >
                       New Customer
                     </h3>
                     <p className="text-[13px] text-slate-500 mt-0.5">
-                      Company name + one or more contacts.
+                      Company and contacts. On save we&apos;ll start a quote for them.
                     </p>
                   </div>
                   <button
                     type="button"
                     aria-label="Close"
                     onClick={close}
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                    disabled={pending}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-40"
                   >
                     <X className="w-4 h-4" aria-hidden />
                   </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 min-h-0">
                   <div>
-                    <label htmlFor="customer-name" className="glass-label">
+                    <label htmlFor="new-customer-quote-name" className="glass-label">
                       Company Name
                     </label>
                     <input
-                      id="customer-name"
+                      id="new-customer-quote-name"
                       name="name"
                       value={company}
                       onChange={(e) => setCompany(e.target.value)}
@@ -121,23 +146,39 @@ export function NewCustomerModal() {
                       contacts.filter((c) => c.name.trim().length > 0),
                     )}
                   />
+
+                  {error && (
+                    <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-[12.5px] text-rose-900">
+                      <span className="font-semibold">Couldn&apos;t save.</span> {error}
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50/60">
+                <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50/60 shrink-0">
                   <button
                     type="button"
                     onClick={close}
+                    disabled={pending}
                     className="btn-glass text-[13.5px]"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={!company.trim() || !contacts[0]?.name.trim()}
+                    disabled={pending || !canSubmit}
                     className="btn-glass-prominent"
                   >
-                    <Plus className="w-4 h-4" strokeWidth={2.5} aria-hidden />
-                    Create Customer
+                    {pending ? (
+                      <>
+                        <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" />
+                        Saving…
+                      </>
+                    ) : (
+                      <>
+                        Save &amp; Start Quote
+                        <ArrowRight className="w-4 h-4" strokeWidth={2.5} aria-hidden />
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
