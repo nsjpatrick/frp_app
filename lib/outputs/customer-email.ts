@@ -1,12 +1,13 @@
 import { formatFormula } from '@/lib/format';
+import { computePricing, type PricingInputs } from '@/lib/pricing/pricing-engine';
 
 /**
  * Builds the customer-facing plain-text email body. NO engineering JSON —
  * the customer sees scope + pricing + details only; the JSON is an
  * internal engineering-only artifact that stays inside the company.
  *
- * Pricing values are mock for V1 (match the Live Summary preview numbers).
- * Plan 3 wires the real pricing-engine output.
+ * Pricing runs through the V0 engine so every surface (PDF, email, live
+ * rail, quote detail) shows the same number.
  */
 export function buildCustomerEmailBody(args: {
   quoteNumber: string;
@@ -18,6 +19,10 @@ export function buildCustomerEmailBody(args: {
   designTempF?: number;
   specificGravity?: number;
   geometry: any;
+  /** Service / certs / wallBuildup passed straight through to the engine. */
+  service: PricingInputs['service'];
+  certs: PricingInputs['certs'];
+  wallBuildup: PricingInputs['wallBuildup'];
   resinName?: string;
 }): string {
   const f = formatFormula;
@@ -33,9 +38,21 @@ export function buildCustomerEmailBody(args: {
 
   const diameterFt = g.idIn ? (g.idIn / 12).toFixed(1) : '—';
   const heightFt   = g.ssHeightIn ? (g.ssHeightIn / 12).toFixed(1) : '—';
-  const vesselLine = g.orientation
+  const quantity = Math.max(1, Math.floor(Number(g.quantity) || 1));
+  const vesselLineBase = g.orientation
     ? `${diameterFt}' ID × ${heightFt}' SS ${String(g.orientation).charAt(0).toUpperCase()}${String(g.orientation).slice(1)} FRP Tank`
     : 'FRP tank per specification';
+  const vesselLine = quantity > 1 ? `(${quantity}×) ${vesselLineBase}` : vesselLineBase;
+
+  // Pricing runs through the shared engine so PDF / email / live rail
+  // never drift apart.
+  const pricing = computePricing({
+    geometry: g,
+    service: args.service,
+    certs: args.certs,
+    wallBuildup: args.wallBuildup,
+  });
+  const usd = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
 
   return [
     `Hi ${args.customerContact ?? args.customerCompany},`,
@@ -54,10 +71,15 @@ export function buildCustomerEmailBody(args: {
     `Connections:   ${nozzleSummary}`,
     '',
     '── Pricing (USD) ──────────────────────────────────────',
-    'Materials, fabrication, and labor          $48,512',
-    'Freight allowance                            $1,600',
+    pricing.quantity > 1
+      ? `Per vessel — materials, fabrication, labor   ${usd(pricing.unitPrice).padStart(10)}`
+      : `Materials, fabrication, and labor            ${usd(pricing.unitPrice).padStart(10)}`,
+    pricing.quantity > 1
+      ? `Vessels (× ${pricing.quantity})                              ${usd(pricing.extendedPrice).padStart(10)}`
+      : null,
+    `Freight allowance                            ${usd(pricing.freight).padStart(10)}`,
     '                                         ──────────',
-    'Quote Total                                $50,112',
+    `Quote Total                                  ${usd(pricing.totalDelivered).padStart(10)}`,
     '',
     'Terms:         Net 30 from invoice date',
     'Validity:      30 days from this quote',
