@@ -53,9 +53,19 @@ export async function saveServiceStep(quoteId: string, label: string, formData: 
 
   const site = siteEnvSchema.parse(JSON.parse(String(formData.get('siteJson'))));
 
+  // Resin now lives on the chemistry step — user picks it right next to
+  // chemical + family with a compatibility-aware auto-select. We merge
+  // into the existing wallBuildup JSON so any other fields persisted
+  // there (via Step 3 historically) stay intact.
+  const resinIdRaw = String(formData.get('resinId') ?? '').trim();
+  const existingWallBuildup = (rev.wallBuildup ?? {}) as any;
+  const wallBuildup = resinIdRaw
+    ? { ...existingWallBuildup, resinId: resinIdRaw }
+    : existingWallBuildup;
+
   await db.revision.update({
     where: { id: rev.id },
-    data: { service, certs, site },
+    data: { service, certs, site, wallBuildup: wallBuildup as any },
   });
 
   await writeAuditEntry(db, {
@@ -75,6 +85,7 @@ export async function saveGeometryStep(quoteId: string, label: string, formData:
   const user = await getUser();
   const rev = await loadRevision(quoteId, label, user.tenantId);
 
+  const quantityRaw = Number(formData.get('quantity'));
   const geometry = geometrySchema.parse({
     orientation: formData.get('orientation'),
     idIn: Number(formData.get('idIn')),
@@ -82,6 +93,7 @@ export async function saveGeometryStep(quoteId: string, label: string, formData:
     topHead: formData.get('topHead'),
     bottom: formData.get('bottom'),
     freeboardIn: Number(formData.get('freeboardIn')),
+    quantity: Number.isFinite(quantityRaw) && quantityRaw > 0 ? Math.floor(quantityRaw) : 1,
     nozzles: (() => {
       try {
         const raw = formData.get('nozzlesJson');
@@ -106,25 +118,6 @@ export async function saveGeometryStep(quoteId: string, label: string, formData:
     actorUserId: user.id,
     action: 'update:geometry',
     diffJson: { geometry },
-  });
-
-  await recomputeStructuralAnalysis(rev.id);
-  redirect(`/quotes/${quoteId}/rev/${label}/step-3`);
-}
-
-export async function saveResinStep(quoteId: string, label: string, formData: FormData) {
-  const user = await getUser();
-  const rev = await loadRevision(quoteId, label, user.tenantId);
-  const resinId = String(formData.get('resinId'));
-
-  await db.revision.update({ where: { id: rev.id }, data: { wallBuildup: { resinId } } });
-  await writeAuditEntry(db, {
-    entityType: 'Revision',
-    entityId: rev.id,
-    revisionId: rev.id,
-    actorUserId: user.id,
-    action: 'update:resin',
-    diffJson: { resinId },
   });
 
   await recomputeStructuralAnalysis(rev.id);

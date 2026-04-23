@@ -137,16 +137,12 @@ export default async function QuotesIndex({
                   return (
                     <tr key={quote.id} className="border-t border-slate-200/40 hover:bg-white/50 transition-colors">
                       <td className="px-5 py-3 font-mono text-[13px] text-slate-800 whitespace-nowrap">
-                        {quote.revisions[0] ? (
-                          <Link
-                            href={`/quotes/${quote.id}/rev/${latestLabel}/review`}
-                            className="hover:text-amber-700"
-                          >
-                            {quote.number}
-                          </Link>
-                        ) : (
-                          quote.number
-                        )}
+                        <Link
+                          href={`/quotes/${quote.id}`}
+                          className="hover:text-amber-700"
+                        >
+                          {quote.number}
+                        </Link>
                       </td>
                       <td className="px-5 py-3 text-slate-900">{quote.customer.name}</td>
                       <td className="px-5 py-3">

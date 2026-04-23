@@ -169,8 +169,7 @@ export default async function Dashboard() {
           ) : (
             <ul className="divide-y divide-slate-200/60 overflow-y-auto flex-1 min-h-0">
               {recent.map((q) => {
-                const rev = q.revisions[0];
-                const href = rev ? `/quotes/${q.id}/rev/${rev.label}/review` : '#';
+                const href = `/quotes/${q.id}`;
                 return (
                   <li key={q.id}>
                     <Link
