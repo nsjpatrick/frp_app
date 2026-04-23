@@ -1,20 +1,41 @@
 import Link from 'next/link';
-import { LiveSummaryMock } from './LiveSummaryMock';
+import { db } from '@/lib/db';
+import { LiveSummary } from './LiveSummary';
+import {
+  computeStepCompleteness,
+  type StepPath,
+} from '@/lib/revisions/completeness';
 
-const STEPS = [
+const STEPS: Array<{ n: number; label: string; path: StepPath }> = [
   { n: 1, label: 'Service & Certifications', path: 'step-1' },
   { n: 2, label: 'Geometry',                 path: 'step-2' },
-  { n: 3, label: 'Resin & Wall Buildup',     path: 'step-3' },
-  { n: 4, label: 'Review & Generate',        path: 'review' },
-  { n: 5, label: 'Customer & Project',       path: 'send' },
+  { n: 3, label: 'Review & Generate',        path: 'review' },
+  { n: 4, label: 'Customer & Project',       path: 'send' },
 ];
 
-function stateFor(currentPath: string, stepPath: string): 'completed' | 'current' | 'upcoming' {
+/**
+ * Given the current step path + per-step completeness, decide how each
+ * nav pill should render:
+ *   - `current`   → this step
+ *   - `completed` → earlier step; always clickable (lets reps fix things)
+ *   - `allowed`   → upcoming step whose prerequisites are all complete; clickable
+ *   - `locked`    → upcoming step whose prerequisites aren't done; greyed out,
+ *                   pointer-events disabled so the rep can't jump ahead
+ */
+function stateFor(
+  currentPath: StepPath,
+  stepPath: StepPath,
+  completeness: Record<StepPath, boolean>,
+): 'completed' | 'current' | 'allowed' | 'locked' {
   const currentIdx = STEPS.findIndex((s) => s.path === currentPath);
   const thisIdx = STEPS.findIndex((s) => s.path === stepPath);
   if (thisIdx === currentIdx) return 'current';
   if (thisIdx < currentIdx) return 'completed';
-  return 'upcoming';
+  // Upcoming step — allow iff every step before it is complete.
+  for (let i = 0; i < thisIdx; i++) {
+    if (!completeness[STEPS[i].path]) return 'locked';
+  }
+  return 'allowed';
 }
 
 /**
@@ -30,7 +51,7 @@ function stateFor(currentPath: string, stepPath: string): 'completed' | 'current
  * first visible row (left = "Quote · Rev" eyebrow, middle = step page
  * header, right = live-summary eyebrow) sits at the same Y.
  */
-export function WizardShell({
+export async function WizardShell({
   quoteId,
   revLabel,
   current,
@@ -43,6 +64,30 @@ export function WizardShell({
   children: React.ReactNode;
   summary?: React.ReactNode;
 }) {
+  // Load the revision + quote once so the rail's LiveSummary can seed
+  // the pricing engine, and so the nav can gate upcoming steps by
+  // per-step completeness. A pass-through `summary` still wins if a
+  // caller wants to override the rail entirely.
+  const rev = await db.revision.findUnique({
+    where: { quoteId_label: { quoteId, label: revLabel } },
+    include: { quote: true },
+  });
+  const pricingInputs = rev && !summary
+    ? {
+        geometry: (rev.geometry ?? {}) as any,
+        service: (rev.service ?? {}) as any,
+        certs: (rev.certs ?? {}) as any,
+        wallBuildup: (rev.wallBuildup ?? {}) as any,
+      }
+    : null;
+
+  const completeness = rev
+    ? computeStepCompleteness({
+        revision: rev,
+        quote: { totalPrice: rev.quote.totalPrice ?? null },
+      })
+    : { 'step-1': false, 'step-2': false, review: false, send: false };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_300px] gap-5 mt-6 items-start">
       {/* Left — step nav. Natural height; hugs its content. */}
@@ -52,13 +97,37 @@ export function WizardShell({
         </div>
         <nav className="space-y-1">
           {STEPS.map((s) => {
-            const state = stateFor(current, s.path);
+            const state = stateFor(current as StepPath, s.path, completeness);
+            const isLocked = state === 'locked';
+            const stateClass =
+              state === 'current' ? 'current'
+              : state === 'completed' ? 'completed'
+              : state === 'allowed' ? 'upcoming'
+              : 'locked';
+            const href = `/quotes/${quoteId}/rev/${revLabel}/${s.path}`;
+            const pillClass = `step-pill ${stateClass} ${isLocked ? 'pointer-events-none opacity-50 cursor-not-allowed' : ''}`;
+            // Locked upcoming steps render as a non-link <span> so they're
+            // also keyboard-inert and won't even be considered for nav even
+            // if someone forces a click through dev tools. Server action on
+            // the step page then redirects to the earliest incomplete step,
+            // so URL manipulation can't bypass the gate either.
+            if (isLocked) {
+              return (
+                <span
+                  key={s.path}
+                  role="link"
+                  aria-disabled
+                  tabIndex={-1}
+                  title="Finish the previous step first"
+                  className={pillClass}
+                >
+                  <span className="step-num">{s.n}</span>
+                  <span className="flex-1">{s.label}</span>
+                </span>
+              );
+            }
             return (
-              <Link
-                key={s.path}
-                href={`/quotes/${quoteId}/rev/${revLabel}/${s.path}`}
-                className={`step-pill ${state}`}
-              >
+              <Link key={s.path} href={href} className={pillClass}>
                 <span className="step-num">
                   {state === 'completed' ? '✓' : s.n}
                 </span>
@@ -81,7 +150,10 @@ export function WizardShell({
 
       {/* Right — live summary. Natural height; hugs its content. */}
       <aside className="glass px-5 pt-6 md:pt-8 pb-5">
-        {summary ?? <LiveSummaryMock />}
+        {summary ?? (pricingInputs
+          ? <LiveSummary inputs={pricingInputs} />
+          : <LiveSummary inputs={{ geometry: {}, service: {}, certs: {}, wallBuildup: {} }} />
+        )}
       </aside>
     </div>
   );

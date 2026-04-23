@@ -44,6 +44,16 @@ model Customer {
   contactEmail String?
   contactPhone String?
   contacts     Json?
+  // Company billing / default address. All fields optional — reps often
+  // start a customer with just a name and fill in address details later
+  // when a formal quote is being sent. The Quote PDF's "Prepared For"
+  // block reads from here when present.
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  region       String?
+  postalCode   String?
+  country      String?
   createdAt DateTime @default(now())
 
   projects  Project[]

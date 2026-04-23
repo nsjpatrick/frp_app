@@ -320,18 +320,12 @@ function ProjectCard({
           <ul className="space-y-1.5">
             {visible.map((q) => (
               <li key={q.id} className="flex items-center justify-between gap-3">
-                {q.revLabel ? (
-                  <Link
-                    href={`/quotes/${q.id}/rev/${q.revLabel}/review`}
-                    className="font-mono tabular-nums text-[12.5px] text-slate-700 hover:text-amber-700 truncate"
-                  >
-                    {q.number}
-                  </Link>
-                ) : (
-                  <span className="font-mono tabular-nums text-[12.5px] text-slate-700 truncate">
-                    {q.number}
-                  </span>
-                )}
+                <Link
+                  href={`/quotes/${q.id}`}
+                  className="font-mono tabular-nums text-[12.5px] text-slate-700 hover:text-amber-700 truncate"
+                >
+                  {q.number}
+                </Link>
                 <span className={`${STATUS_STYLE[q.status] ?? 'glass-chip'} text-[10.5px] shrink-0`}>
                   {STATUS_LABEL[q.status] ?? q.status}
                 </span>

@@ -1,6 +1,7 @@
 import { SEED_RESINS } from '@/lib/catalog/seed-data';
 import { TANK_TYPE_BY_ID } from '@/lib/catalog/tank-types';
 import { formatFormula, formatUSD } from '@/lib/format';
+import { computePricing } from '@/lib/pricing/pricing-engine';
 
 /**
  * Shape the Quote PDF renders from. Flat, serializable, and derived from
@@ -24,6 +25,9 @@ export type QuotePdfData = {
     email: string;
     phone: string;
     siteAddress: string;
+    // Optional multi-line company address for the "Prepared For" block.
+    // Each entry is already a formatted line; consumers render as-is.
+    companyAddressLines: string[];
   };
   salesRep: {
     name: string;
@@ -44,6 +48,7 @@ export type QuotePdfData = {
     capacityGal: string;     // approximate, from cylinder volume
     topHead: string;         // "Open top" / "Closed, flanged & dished" / etc.
     bottom: string;          // "Flat" / "Dished" / "Conical"
+    quantity: number;        // ≥ 1. Surfaces as a line item when > 1.
   };
   service: {
     chemical: string;        // formula-subscripted
@@ -74,10 +79,11 @@ export type QuotePdfData = {
   };
   accessories: string[];     // bulleted list — nozzles + manway + stand + etc.
   pricing: {
-    basePrice: string;       // "$48,512"
-    freight: string;         // "$1,600"
-    totalDelivered: string;  // sum
-    priceRaw: number | null; // for "subject to pricing" branch
+    unitPrice: string;              // Per-vessel price ("$48,512")
+    quantity: number;               // Mirrored here so the renderer only reaches one object.
+    lineExtended: string;           // unitPrice × quantity
+    freight: string;                // "$1,600"
+    totalDelivered: string;         // lineExtended + freight
   };
   clarifications: string[];
 };
@@ -97,6 +103,35 @@ function gallonsFromCylinder(idIn: number | null, ssHeightIn: number | null): st
   const volInCubed = CAP_PER_CYL_IN3 * (idIn / 2) ** 2 * ssHeightIn;
   const gal = Math.round(volInCubed / 231);
   return `${gal.toLocaleString('en-US')} gal`;
+}
+
+/**
+ * Format a Customer's optional address columns into display lines.
+ *   Line 1: street + suite
+ *   Line 2: "City, Region PostalCode"
+ *   Line 3: Country
+ * Any line with no content is dropped. Returns an empty array if no
+ * address fields are present — caller can check `.length` to decide
+ * whether to render the block at all.
+ */
+function buildAddressLines(c: {
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  region: string | null;
+  postalCode: string | null;
+  country: string | null;
+}): string[] {
+  const lines: string[] = [];
+  const street = [c.addressLine1, c.addressLine2].filter(Boolean).join(', ');
+  if (street) lines.push(street);
+  const cityLine = [
+    c.city,
+    [c.region, c.postalCode].filter(Boolean).join(' '),
+  ].filter((s) => s && s.trim()).join(', ');
+  if (cityLine) lines.push(cityLine);
+  if (c.country) lines.push(c.country);
+  return lines;
 }
 
 function labelFromEnum(value: string | null | undefined, map: Record<string, string> = {}): string {
@@ -142,6 +177,12 @@ export function buildQuotePdfData(args: {
       contactName: string | null;
       contactEmail: string | null;
       contactPhone: string | null;
+      addressLine1: string | null;
+      addressLine2: string | null;
+      city: string | null;
+      region: string | null;
+      postalCode: string | null;
+      country: string | null;
     };
     project: {
       name: string;
@@ -199,14 +240,21 @@ export function buildQuotePdfData(args: {
   if (geom.liftingLugs) accessories.push('Integral lifting lugs');
   if (accessories.length === 0) accessories.push('Per specification');
 
-  // Pricing. V1 mirrors the customer email's mock totals when the live
-  // pricing engine hasn't filled in `totalPrice` yet. Once the engine lands
-  // we just drop the fallback.
-  const priceRaw = quote.totalPrice ?? null;
-  const basePrice = priceRaw != null ? formatUSD(priceRaw) : '$48,512';
-  const freight   = '$1,600';
-  const totalDeliveredNum = (priceRaw ?? 48512) + 1600;
-  const totalDelivered = formatUSD(totalDeliveredNum);
+  // Pricing flows through the V0 engine so every surface (PDF, email,
+  // live rail, quote detail) reads one number. Engine reacts to quantity
+  // + vessel size + cert stack + resin + accessories; swap the engine
+  // body when the real pricing engine lands.
+  const pricing = computePricing({
+    geometry: geom,
+    service: svc,
+    certs,
+    wallBuildup: wall,
+  });
+  const quantity = pricing.quantity;
+  const unitPrice = formatUSD(pricing.unitPrice);
+  const lineExtended = formatUSD(pricing.extendedPrice);
+  const freight = formatUSD(pricing.freight);
+  const totalDelivered = formatUSD(pricing.totalDelivered);
 
   const clarifications: string[] = [
     `Fabrication per ${astmSpec} using ${resin?.name ?? 'customer-approved'} resin as the corrosion barrier.`,
@@ -242,6 +290,7 @@ export function buildQuotePdfData(args: {
       email: quote.customer.contactEmail ?? '',
       phone: quote.customer.contactPhone ?? '',
       siteAddress: quote.project?.siteAddress ?? '',
+      companyAddressLines: buildAddressLines(quote.customer),
     },
     salesRep,
     product: {
@@ -258,6 +307,7 @@ export function buildQuotePdfData(args: {
       capacityGal: gallonsFromCylinder(geom.idIn, geom.ssHeightIn),
       topHead: labelFromEnum(geom.topHead, TOP_LABEL),
       bottom: labelFromEnum(geom.bottom, BOTTOM_LABEL),
+      quantity,
     },
     service: {
       chemical: formatFormula(svc.chemical) || 'Per RFI',
@@ -289,10 +339,11 @@ export function buildQuotePdfData(args: {
     },
     accessories,
     pricing: {
-      basePrice,
+      unitPrice,
+      quantity,
+      lineExtended,
       freight,
       totalDelivered,
-      priceRaw,
     },
     clarifications,
   };
