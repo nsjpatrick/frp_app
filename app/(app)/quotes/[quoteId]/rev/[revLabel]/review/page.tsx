@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { ChevronRight } from 'lucide-react';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
@@ -9,6 +9,7 @@ import { RULES_ENGINE_VERSION } from '@/lib/rules';
 import { SEED_RESINS, CHEMICAL_FAMILY_LABEL } from '@/lib/catalog/seed-data';
 import type { ChemicalFamily } from '@/lib/catalog/seed-data';
 import { formatFormula } from '@/lib/format';
+import { computeStepCompleteness, resolveGuardedStep } from '@/lib/revisions/completeness';
 
 const RESIN_FAMILY_LABEL: Record<string, string> = {
   vinyl_ester: 'Vinyl Ester',
@@ -31,6 +32,13 @@ export default async function Review({ params }: { params: Promise<{ quoteId: st
   });
   if (!rev || rev.quote.customer.tenantId !== user.tenantId) notFound();
 
+  const completeness = computeStepCompleteness({
+    revision: rev,
+    quote: { totalPrice: rev.quote.totalPrice ?? null },
+  });
+  const allowed = resolveGuardedStep('review', completeness);
+  if (allowed !== 'review') redirect(`/quotes/${quoteId}/rev/${revLabel}/${allowed}`);
+
   const json = buildEngineeringJson(
     { quote: rev.quote, revision: rev } as any,
     { rulesEngineVersion: RULES_ENGINE_VERSION, catalogSnapshotId: 'seed-v0' },
@@ -44,7 +52,7 @@ export default async function Review({ params }: { params: Promise<{ quoteId: st
     <WizardShell quoteId={quoteId} revLabel={revLabel} current="review">
       <header className="mb-6">
         <div className="text-[11px] font-semibold tracking-[0.12em] uppercase text-amber-700 mb-2">
-          Step 4 of 5
+          Step 3 of 4
         </div>
         <h2 className="text-2xl font-semibold tracking-tight text-slate-900 whitespace-nowrap">
           Review &amp; Generate

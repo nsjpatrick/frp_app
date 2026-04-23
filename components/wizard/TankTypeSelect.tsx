@@ -21,6 +21,18 @@ export function TankTypeSelect({ defaultValue }: { defaultValue?: string }) {
   const [value, setValue] = useState(initial);
   const current = TANK_TYPE_BY_ID[value];
 
+  // Broadcast the selected tank-type so sibling client components in the
+  // same step (e.g. the certifications section) can react without having
+  // to be re-parented. Keeps the form markup flat while still letting
+  // downstream sections conditionally show/hide fields like the RTP-1
+  // class picker, which only applies when "ASME RTP-1 Vessel" is chosen.
+  const broadcast = (next: string) => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent('tank-type:changed', { detail: { tankType: next } }),
+    );
+  };
+
   return (
     <div>
       <label className="glass-label" htmlFor="tankType">Product family</label>
@@ -28,7 +40,7 @@ export function TankTypeSelect({ defaultValue }: { defaultValue?: string }) {
         id="tankType"
         name="tankType"
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => { setValue(e.target.value); broadcast(e.target.value); }}
         className="glass-input w-full"
       >
         {TANK_TYPE_CATEGORY_ORDER.map((group) => (

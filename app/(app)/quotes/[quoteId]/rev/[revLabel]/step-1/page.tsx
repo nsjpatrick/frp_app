@@ -7,6 +7,7 @@ import { saveServiceStep } from '@/lib/actions/revisions';
 import { SiteLookupSection } from '@/components/wizard/SiteLookupSection';
 import { TankTypeSelect } from '@/components/wizard/TankTypeSelect';
 import { ChemistrySection } from '@/components/wizard/ChemistrySection';
+import { RtpClassFields } from '@/components/wizard/RtpClassFields';
 
 export default async function Step1({ params }: { params: Promise<{ quoteId: string; revLabel: string }> }) {
   const { quoteId, revLabel } = await params;
@@ -20,10 +21,15 @@ export default async function Step1({ params }: { params: Promise<{ quoteId: str
 
   const s: any = rev.service ?? {};
   const c: any = rev.certs ?? {};
+  const w: any = rev.wallBuildup ?? {};
+  // Start fresh quotes with structural fields empty so reps can't advance
+  // past Step 1 on defaults. The postal-code lookup (or manual entry)
+  // fills them in before the form will submit. Risk category + site class
+  // have sensible defaults since they're categorical picks.
   const site: any = rev.site ?? {
     indoor: false,
-    seismic: { siteClass: 'D', Ss: 1.0, S1: 0.35, Ie: 1.0, riskCategory: 'II' },
-    wind: { V: 115, exposure: 'C', Kzt: 1.0, riskCategory: 'II' },
+    seismic: { siteClass: 'D', Ss: null, S1: null, Ie: 1.0, riskCategory: 'II' },
+    wind: { V: null, exposure: 'C', Kzt: 1.0, riskCategory: 'II' },
   };
 
   const save = saveServiceStep.bind(null, quoteId, revLabel);
@@ -32,7 +38,7 @@ export default async function Step1({ params }: { params: Promise<{ quoteId: str
     <WizardShell quoteId={quoteId} revLabel={revLabel} current="step-1">
       <header className="mb-8">
         <div className="text-[11px] font-semibold tracking-[0.12em] uppercase text-amber-700 mb-2">
-          Step 1 of 5
+          Step 1 of 4
         </div>
         <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
           Service Conditions &amp; Certifications
@@ -58,6 +64,7 @@ export default async function Step1({ params }: { params: Promise<{ quoteId: str
             concentrationPct: s.concentrationPct != null ? String(s.concentrationPct) : '',
             specificGravity: s.specificGravity != null ? String(s.specificGravity) : '1.0',
             postCure: !!s.postCure,
+            resinId: w.resinId ?? '',
           }}
         />
 
@@ -92,27 +99,11 @@ export default async function Step1({ params }: { params: Promise<{ quoteId: str
         <section>
           <h3 className="section-head">Certifications &amp; Inspection</h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5 items-start">
-            <div>
-              <label className="glass-label" htmlFor="asmeRtp1Class">ASME RTP-1 class</label>
-              <select
-                id="asmeRtp1Class"
-                name="asmeRtp1Class"
-                defaultValue={c.asmeRtp1Class ?? ''}
-                className="glass-input"
-              >
-                <option value="">— None —</option>
-                <option value="I">Class I</option>
-                <option value="II">Class II</option>
-                <option value="III">Class III</option>
-              </select>
-            </div>
-            <div>
-              <label className="glass-label" htmlFor="asmeRtp1StdRevision">RTP-1 revision</label>
-              <input id="asmeRtp1StdRevision" name="asmeRtp1StdRevision"
-                     defaultValue={c.asmeRtp1StdRevision ?? 'RTP-1:2019'} className="glass-input" />
-            </div>
-          </div>
+          <RtpClassFields
+            initialTankType={s.tankType}
+            initialClass={c.asmeRtp1Class ?? ''}
+            initialRevision={c.asmeRtp1StdRevision ?? 'RTP-1:2019'}
+          />
 
           <div className="flex flex-wrap gap-2 mb-5">
             <label className="toggle-pill">
