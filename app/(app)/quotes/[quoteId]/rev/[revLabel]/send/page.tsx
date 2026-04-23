@@ -60,6 +60,8 @@ export default async function SendStep({ params }: { params: Promise<{ quoteId: 
         customerName={customer.name}
         projectId={project?.id ?? null}
         quoteNumber={rev.quote.number}
+        quoteId={quoteId}
+        revLabel={revLabel}
         mailtoBody={mailtoBody}
         initial={{
           contactName:  customer.contactName ?? '',

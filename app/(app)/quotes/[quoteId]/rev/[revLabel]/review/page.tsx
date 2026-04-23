@@ -196,13 +196,23 @@ export default async function Review({ params }: { params: Promise<{ quoteId: st
 
       {/* Action row — Next continues to the Customer & Project confirmation
           step, where the rep verifies recipient details before sending. */}
-      <div className="flex items-center justify-between gap-3 pt-6 mt-4 border-t border-slate-200">
-        <a
-          href={`/quotes/${quoteId}/rev/${revLabel}/engineering.json`}
-          className="text-[13px] text-slate-500 hover:text-slate-800 underline-offset-4 hover:underline"
-        >
-          Download Engineering JSON
-        </a>
+      <div className="flex items-center justify-between gap-4 pt-6 mt-4 border-t border-slate-200">
+        <div className="flex items-center gap-4">
+          <a
+            href={`/quotes/${quoteId}/rev/${revLabel}/quote.pdf?mode=inline`}
+            target="_blank"
+            rel="noopener"
+            className="text-[13px] text-slate-600 hover:text-slate-900 underline-offset-4 hover:underline"
+          >
+            Preview Quote PDF
+          </a>
+          <a
+            href={`/quotes/${quoteId}/rev/${revLabel}/engineering.json`}
+            className="text-[13px] text-slate-500 hover:text-slate-800 underline-offset-4 hover:underline"
+          >
+            Engineering JSON
+          </a>
+        </div>
         <Link
           href={`/quotes/${quoteId}/rev/${revLabel}/send`}
           className="btn-glass-prominent !px-3"
