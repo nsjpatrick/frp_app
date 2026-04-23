@@ -12,6 +12,12 @@ export const customerCreateSchema = z.object({
   contacts: z.array(contactSchema).min(1),
 });
 
+export const customerUpdateSchema = z.object({
+  customerId: z.string().min(1),
+  name: z.string().min(1).max(200),
+  contacts: z.array(contactSchema).min(1),
+});
+
 // ID validators accept any non-empty string rather than strict cuid() so that
 // seeded/fixture rows (IDs like `mock-proj-00-1`) pass through. Tenant-ownership
 // checks in the server actions enforce authorization regardless of ID format.
@@ -85,6 +91,12 @@ export const siteEnvSchema = z.object({
     Kzt: z.number(),
     riskCategory: z.enum(['I', 'II', 'III', 'IV']),
   }),
+  // Optional — persisted so a later edit re-seeds the postal-code input
+  // instead of making the rep look it up again.
+  postal: z.object({
+    country: z.string().max(4),
+    code:    z.string().max(20),
+  }).optional(),
 });
 
 export const STAINLESS_GRADES = [

@@ -1,65 +1,134 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { lookupSiteByAddress } from '@/lib/actions/site-lookup';
+import { MapPin } from 'lucide-react';
+import { lookupSiteByPostal } from '@/lib/actions/site-lookup';
 
 type Site = {
   indoor: boolean;
   seismic: { siteClass: 'A' | 'B' | 'C' | 'D' | 'E' | 'F'; Ss: number; S1: number; Ie: number; riskCategory: 'I' | 'II' | 'III' | 'IV' };
-  wind: { V: number; exposure: 'B' | 'C' | 'D'; Kzt: number; riskCategory: 'I' | 'II' | 'III' | 'IV' };
+  wind:    { V: number; exposure: 'B' | 'C' | 'D'; Kzt: number; riskCategory: 'I' | 'II' | 'III' | 'IV' };
 };
 
-export function SiteLookupSection({ initial, siteAddress }: { initial: Site; siteAddress: string }) {
-  const [site, setSite] = useState<Site>(initial);
+// Countries supported by Zippopotam.us that cover most real-world quotes.
+// US sits first / default because ASCE 7-22 seismic values only cover
+// US territory — non-US lookups will geocode but USGS returns nothing.
+const COUNTRIES: Array<{ code: string; label: string }> = [
+  { code: 'US', label: 'United States' },
+  { code: 'CA', label: 'Canada' },
+  { code: 'MX', label: 'Mexico' },
+  { code: 'GB', label: 'United Kingdom' },
+  { code: 'DE', label: 'Germany' },
+  { code: 'FR', label: 'France' },
+  { code: 'IT', label: 'Italy' },
+  { code: 'ES', label: 'Spain' },
+  { code: 'NL', label: 'Netherlands' },
+  { code: 'BE', label: 'Belgium' },
+  { code: 'SE', label: 'Sweden' },
+  { code: 'NO', label: 'Norway' },
+  { code: 'DK', label: 'Denmark' },
+  { code: 'FI', label: 'Finland' },
+  { code: 'JP', label: 'Japan' },
+  { code: 'AU', label: 'Australia' },
+  { code: 'NZ', label: 'New Zealand' },
+  { code: 'BR', label: 'Brazil' },
+  { code: 'PR', label: 'Puerto Rico' },
+];
+
+export function SiteLookupSection({
+  initial,
+  defaultPostal,
+  defaultCountry = 'US',
+}: {
+  initial: Site;
+  /** Seed the postal-code input from whatever was on the last revision. */
+  defaultPostal?: string;
+  defaultCountry?: string;
+}) {
+  const [site, setSite]     = useState<Site>(initial);
+  const [country, setCountry] = useState(defaultCountry || 'US');
+  const [postal, setPostal]   = useState(defaultPostal || '');
   const [lookupResult, setLookupResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
   const handleLookup = () => {
+    if (!postal.trim()) {
+      setLookupResult({ ok: false, msg: 'Enter a postal code first.' });
+      return;
+    }
     startTransition(async () => {
-      const r = await lookupSiteByAddress(siteAddress, site.seismic.siteClass, site.seismic.riskCategory);
-      if ('error' in r) {
-        setLookupResult({ ok: false, msg: r.error });
-      } else {
+      const r = await lookupSiteByPostal(country, postal, site.seismic.siteClass, site.seismic.riskCategory);
+      if ('seismic' in r) {
         setSite((s) => ({ ...s, seismic: { ...s.seismic, Ss: r.seismic.Ss, S1: r.seismic.S1 } }));
         setLookupResult({ ok: true, msg: r.matchedAddress });
+      } else {
+        // Even on "unsupported country" we still surface the resolved
+        // place name so the rep can confirm geocoding worked.
+        const prefix = r.matchedAddress ? `${r.matchedAddress} — ` : '';
+        setLookupResult({ ok: false, msg: prefix + r.error });
       }
     });
   };
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="text-[13px] text-slate-500">
-          Site address <span className="text-slate-400">(from project)</span>
-          <div className="font-medium text-slate-700 text-[14px] mt-0.5">
-            {siteAddress || <span className="text-slate-400">No address on project</span>}
+      {/* Postal-code row */}
+      <div>
+        <div className="grid grid-cols-[140px_1fr_auto] gap-3 items-end">
+          <div>
+            <label htmlFor="site-country" className="glass-label">Country</label>
+            <select
+              id="site-country"
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              className="glass-input"
+            >
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>{c.label}</option>
+              ))}
+            </select>
           </div>
+          <div>
+            <label htmlFor="site-postal" className="glass-label">Postal / ZIP code</label>
+            <input
+              id="site-postal"
+              value={postal}
+              onChange={(e) => setPostal(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleLookup(); } }}
+              placeholder={country === 'US' ? '45014' : country === 'GB' ? 'SW1A 1AA' : country === 'CA' ? 'M5V 3A8' : 'Postal code'}
+              className="glass-input font-mono tabular-nums"
+              autoComplete="postal-code"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleLookup}
+            disabled={pending || !postal.trim()}
+            className="btn-glass text-[13px]"
+          >
+            {pending ? (
+              <>
+                <span className="inline-block w-3 h-3 rounded-full border-2 border-amber-600 border-t-transparent animate-spin" />
+                Looking up…
+              </>
+            ) : (
+              <>
+                <MapPin className="w-3.5 h-3.5" strokeWidth={2.5} aria-hidden />
+                Look up seismic
+              </>
+            )}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={handleLookup}
-          disabled={pending || !siteAddress}
-          className="btn-glass text-[13px]"
-        >
-          {pending ? (
-            <>
-              <span className="inline-block w-3 h-3 rounded-full border-2 border-amber-600 border-t-transparent animate-spin" />
-              Looking up…
-            </>
-          ) : (
-            <>
-              <span aria-hidden>🛰</span>
-              Look up seismic from USGS
-            </>
-          )}
-        </button>
+        <p className="text-[11.5px] text-slate-500 mt-2 leading-snug">
+          USGS ASCE 7-22 hazard maps cover the US and US territories. International postal codes
+          will geocode but seismic values must be entered manually or derived from a site-specific study.
+        </p>
       </div>
 
       {lookupResult && (
         <div
-          className={`glass-chip ${lookupResult.ok ? 'glass-tinted-emerald' : ''}`}
+          className={`glass-chip ${lookupResult.ok ? 'glass-tinted-emerald' : 'glass-tinted-rose'}`}
           role="status"
-          style={!lookupResult.ok ? { background: 'rgba(254, 226, 226, 0.6)', color: '#991b1b', borderColor: 'rgba(220, 38, 38, 0.35)' } : undefined}
         >
           {lookupResult.ok ? '✓' : '!'} {lookupResult.msg}
         </div>
@@ -86,7 +155,7 @@ export function SiteLookupSection({ initial, siteAddress }: { initial: Site; sit
               onChange={(e) => setSite({
                 ...site,
                 seismic: { ...site.seismic, riskCategory: e.target.value as Site['seismic']['riskCategory'] },
-                wind: { ...site.wind, riskCategory: e.target.value as Site['wind']['riskCategory'] },
+                wind:    { ...site.wind,    riskCategory: e.target.value as Site['wind']['riskCategory'] },
               })}
               className="glass-input"
             >
@@ -158,7 +227,13 @@ export function SiteLookupSection({ initial, siteAddress }: { initial: Site; sit
         </div>
       </div>
 
-      <input type="hidden" name="siteJson" value={JSON.stringify(site)} />
+      {/* Persist the postal code alongside the site data so a later edit
+          reseeds the input instead of making the rep look it up again. */}
+      <input
+        type="hidden"
+        name="siteJson"
+        value={JSON.stringify({ ...site, postal: { country, code: postal } })}
+      />
     </div>
   );
 }

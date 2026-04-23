@@ -1,31 +1,14 @@
 import Link from 'next/link';
-import { Plus, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { PerPageSelect } from '@/components/PerPageSelect';
-import { formatFormula } from '@/lib/format';
+import { QuoteRowMenu } from '@/components/QuoteRowMenu';
+import { QuoteStatusSelect } from '@/components/QuoteStatusSelect';
 import { Prisma } from '@prisma/client';
 
 const PER_PAGE_OPTIONS = [10, 20, 50, 100] as const;
 const DEFAULT_PER_PAGE = 20;
-
-const STATUS_STYLE: Record<string, string> = {
-  DRAFT:        'glass-chip',
-  SENT:         'glass-chip glass-tinted-slate',
-  ENGINEERING:  'glass-chip glass-tinted-amber',
-  BUILDING:     'glass-chip bg-sky-100/70 text-sky-900 border-sky-300/50',
-  WON:          'glass-chip glass-tinted-emerald',
-  LOST:         'glass-chip bg-rose-100/70 text-rose-900 border-rose-300/50',
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  DRAFT: 'Draft',
-  SENT: 'Sent',
-  ENGINEERING: 'Engineering',
-  BUILDING: 'Building',
-  WON: 'Won',
-  LOST: 'Lost',
-};
 
 function clampPerPage(raw?: string): number {
   const n = Number(raw);
@@ -92,26 +75,17 @@ export default async function QuotesIndex({
 
   return (
     <div className="flex flex-col gap-5" style={{ height: 'calc(100vh - 8rem)' }}>
-      <header className="flex items-end justify-between gap-4 flex-wrap shrink-0">
-        <div>
-          <h1 className="text-[26px] font-semibold tracking-tight text-slate-900">Quotes</h1>
-          <p className="text-[14px] text-slate-500 mt-0.5">
-            Draft, sent, won, and lost quotes across all customers.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <form action="/quotes" method="get" className="relative">
-            <Search
-              className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-              aria-hidden
-            />
+      <header className="flex items-center justify-between gap-4 flex-wrap shrink-0">
+        <h1 className="text-[26px] font-semibold tracking-tight text-slate-900">Quotes</h1>
+        <div className="flex items-center gap-3 flex-1 justify-end">
+          <form action="/quotes" method="get" className="relative flex-1 max-w-[560px]">
             <input
               type="search"
               name="q"
               defaultValue={q}
               placeholder="Search quotes, customers, projects…"
               aria-label="Search quotes"
-              className="glass-input !pl-9 w-[280px]"
+              className="glass-input w-full"
             />
           </form>
           <Link href="/quotes/new" className="btn-glass-prominent">
@@ -151,7 +125,6 @@ export default async function QuotesIndex({
                 <tr className="text-left text-[11px] uppercase tracking-wider text-slate-500 border-b border-slate-200/60">
                   <th className="px-5 py-3 font-semibold">Quote</th>
                   <th className="px-5 py-3 font-semibold">Customer</th>
-                  <th className="px-5 py-3 font-semibold">Project</th>
                   <th className="px-5 py-3 font-semibold">Status</th>
                   <th className="px-5 py-3 font-semibold">Rev</th>
                   <th className="px-5 py-3 font-semibold">Updated</th>
@@ -159,40 +132,40 @@ export default async function QuotesIndex({
                 </tr>
               </thead>
               <tbody>
-                {quotes.map((quote) => (
-                  <tr key={quote.id} className="border-t border-slate-200/40 hover:bg-white/50 transition-colors">
-                    <td className="px-5 py-3 font-mono text-[13px] text-slate-800 whitespace-nowrap">
-                      {quote.number}
-                    </td>
-                    <td className="px-5 py-3 text-slate-900">{quote.customer.name}</td>
-                    <td className="px-5 py-3 text-slate-700">
-                      {quote.project ? (
-                        formatFormula(quote.project.name)
-                      ) : (
-                        <span className="text-slate-400 italic">No project</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className={STATUS_STYLE[quote.status] ?? 'glass-chip'}>
-                        {STATUS_LABEL[quote.status] ?? quote.status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-slate-600">Rev {quote.revisions[0]?.label ?? '—'}</td>
-                    <td className="px-5 py-3 text-slate-500 text-[13px] whitespace-nowrap">
-                      {new Date(quote.updatedAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      {quote.revisions[0] && (
-                        <Link
-                          href={`/quotes/${quote.id}/rev/${quote.revisions[0].label}/review`}
-                          className="text-amber-700 hover:text-amber-900 text-[13px] font-medium whitespace-nowrap"
-                        >
-                          Open →
-                        </Link>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {quotes.map((quote) => {
+                  const latestLabel = quote.revisions[0]?.label ?? 'A';
+                  return (
+                    <tr key={quote.id} className="border-t border-slate-200/40 hover:bg-white/50 transition-colors">
+                      <td className="px-5 py-3 font-mono text-[13px] text-slate-800 whitespace-nowrap">
+                        {quote.revisions[0] ? (
+                          <Link
+                            href={`/quotes/${quote.id}/rev/${latestLabel}/review`}
+                            className="hover:text-amber-700"
+                          >
+                            {quote.number}
+                          </Link>
+                        ) : (
+                          quote.number
+                        )}
+                      </td>
+                      <td className="px-5 py-3 text-slate-900">{quote.customer.name}</td>
+                      <td className="px-5 py-3">
+                        <QuoteStatusSelect quoteId={quote.id} status={quote.status} />
+                      </td>
+                      <td className="px-5 py-3 text-slate-600">Rev {latestLabel}</td>
+                      <td className="px-5 py-3 text-slate-500 text-[13px] whitespace-nowrap">
+                        {new Date(quote.updatedAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <QuoteRowMenu
+                          quoteId={quote.id}
+                          quoteNumber={quote.number}
+                          currentLabel={latestLabel}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

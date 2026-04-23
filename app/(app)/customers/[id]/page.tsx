@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Mail, Phone, User as UserIcon, FolderPlus } from 'lucide-react';
@@ -8,21 +9,40 @@ import { AddContactModal } from '@/components/AddContactModal';
 import { formatFormula } from '@/lib/format';
 import { formatPhone, telHref } from '@/lib/phone';
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const customer = await db.customer.findUnique({
+    where: { id },
+    select: { name: true },
+  });
+  return {
+    title: customer
+      ? `${customer.name} | JobCalc Neo`
+      : 'Customer | JobCalc Neo',
+  };
+}
+
 const STATUS_STYLE: Record<string, string> = {
   DRAFT:        'glass-chip',
   SENT:         'glass-chip glass-tinted-slate',
   ENGINEERING:  'glass-chip glass-tinted-amber',
   BUILDING:     'glass-chip bg-sky-100/70 text-sky-900 border-sky-300/50',
   WON:          'glass-chip glass-tinted-emerald',
-  LOST:         'glass-chip bg-rose-100/70 text-rose-900 border-rose-300/50',
+  SHIPPED:      'glass-chip glass-tinted-emerald',
+  LOST:         'glass-chip glass-tinted-rose',
 };
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: 'Draft',
   SENT: 'Sent',
   ENGINEERING: 'Engineering',
-  BUILDING: 'Building',
+  BUILDING: 'Fabricating',
   WON: 'Won',
+  SHIPPED: 'Shipped',
   LOST: 'Lost',
 };
 

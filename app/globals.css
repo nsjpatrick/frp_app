@@ -166,6 +166,16 @@ body {
   border-color: rgba(16, 185, 129, 0.35);
   color: #064e3b;
 }
+/* Clearly-red variant for terminal failure states (Lost quote, destructive
+ * confirmation chips). Denser red than the prior soft-rose tint so it reads
+ * as a warning at table glance distance. */
+.glass-tinted-rose {
+  background:
+    linear-gradient(180deg, rgba(254, 205, 211, 0.75), rgba(244, 63, 94, 0.4)),
+    rgba(255, 255, 255, 0.3);
+  border-color: rgba(225, 29, 72, 0.4);
+  color: #881337;
+}
 
 /* Glass buttons — standard + prominent (amber PTI primary). */
 .btn-glass {
@@ -387,22 +397,54 @@ select.glass-input.glass-input-tight {
   transform: translateY(-2px);
 }
 
-/* Pill-toggle (used for required-yes/no like NSF 61). */
+/* Pill-toggle (used for required-yes/no like NSF 61 + Post-Cure).
+ *
+ * Base ("off") state is a soft slate pill with a ✕-ish dot before the
+ * label so the user sees at a glance that nothing is selected.
+ *
+ * Active state is driven by :has(input:checked) so clicks re-render the
+ * visuals without any React state or the previous server-side `.on`
+ * class (which couldn't update after hydration because the pill was a
+ * plain <label> wrapping an uncontrolled checkbox). :has() is supported
+ * in Safari 15.4+, Chrome 105+, Firefox 121+. */
 .toggle-pill {
   display: inline-flex; align-items: center; gap: 0.5rem;
   padding: 0.5rem 0.875rem; font-size: 0.875rem; font-weight: 500;
   border-radius: 999px; cursor: pointer; user-select: none;
-  background-color: rgba(255,255,255,0.6);
-  border: 1px solid rgba(15,23,42,0.08);
+  background-color: rgba(241, 245, 249, 0.7);
+  border: 1px solid rgba(100, 116, 139, 0.25);
   color: var(--pti-muted);
   transition: all var(--duration-1) var(--ease-spring);
+  position: relative;
 }
-.toggle-pill:hover { background-color: rgba(255,255,255,0.8); color: var(--pti-ink); }
-.toggle-pill.on {
-  background: linear-gradient(180deg, rgba(253,230,138,0.7), rgba(251,191,36,0.45));
-  border-color: rgba(245,158,11,0.5);
+.toggle-pill::before {
+  content: '';
+  width: 8px; height: 8px; border-radius: 999px;
+  background-color: rgba(148, 163, 184, 0.6);
+  transition: all var(--duration-1) var(--ease-spring);
+  flex-shrink: 0;
+}
+.toggle-pill:hover {
+  background-color: rgba(255, 255, 255, 0.9);
+  color: var(--pti-ink);
+  border-color: rgba(100, 116, 139, 0.4);
+}
+.toggle-pill:has(input:checked) {
+  background: linear-gradient(180deg, rgba(253, 230, 138, 0.75), rgba(251, 191, 36, 0.5));
+  border-color: rgba(217, 119, 6, 0.6);
   color: #78350f;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), 0 6px 16px -6px rgba(217,119,6,0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 6px 16px -6px rgba(217, 119, 6, 0.4);
+}
+.toggle-pill:has(input:checked)::before {
+  background-color: #d97706;
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.2);
+}
+.toggle-pill:focus-within {
+  outline: none;
+  border-color: rgba(217, 119, 6, 0.5);
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.18);
 }
 .toggle-pill input { position: absolute; opacity: 0; pointer-events: none; }
 
@@ -419,3 +461,221 @@ select.glass-input.glass-input-tight {
 /* Hover-lift utility for clickable glass cards. */
 .hover-lift { transition: transform var(--duration-1) var(--ease-spring); }
 .hover-lift:hover { transform: translateY(-2px); }
+
+/* Theme-aware logomark — hide the inverse variant by default so only
+ * the light-mode (dark slate) icon shows on a light Nav. The dark-mode
+ * block below flips which one is displayed. */
+.nav-logo-dark { display: none; }
+
+/* ----------------------------------------------------------------------------
+ * Dark mode — triggered by `html[data-theme="dark"]`. A pre-hydration script in
+ * app/layout.tsx decides whether to add the class based on the user's
+ * localStorage preference ('system' | 'light' | 'dark') and, when in
+ * 'system' mode, the OS's prefers-color-scheme.
+ *
+ * Strategy: flip the design tokens, rewrite the body gradient, rewrite the
+ * glass surface rgbas, and override the most common Tailwind utilities
+ * (bg-white/N, text-slate-*, border-slate-*). Hardcoded rose/emerald/amber
+ * tinted chips are left alone — their designed contrast already reads on
+ * both backgrounds.
+ * ------------------------------------------------------------------------- */
+html[data-theme="dark"] {
+  --pti-ink:       #f1f5f9;
+  --pti-muted:     #94a3b8;
+  --pti-subtle:    #64748b;
+  --pti-hairline:  rgba(255, 255, 255, 0.12);
+
+  --ambient-1: #0f172a;
+  --ambient-2: #1e293b;
+  --ambient-3: #0f172a;
+  --ambient-4: #1e293b;
+
+  --background: #0b1220;
+
+  body {
+    background:
+      radial-gradient(60% 80% at 10% 0%,   rgba(217, 119, 6, 0.14) 0%, transparent 60%),
+      radial-gradient(50% 70% at 90% 10%,  rgba(37, 99, 235, 0.10) 0%, transparent 55%),
+      radial-gradient(60% 60% at 80% 100%, rgba(217, 119, 6, 0.08) 0%, transparent 60%),
+      radial-gradient(40% 50% at 0% 100%,  rgba(30, 41, 59, 0.6) 0%, transparent 65%),
+      linear-gradient(180deg, #0b1220 0%, #0f172a 100%);
+  }
+
+  /* Glass surfaces — dark translucent instead of white translucent. */
+  .glass,
+  .glass-raised,
+  .glass-chip {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+      0 1px 2px rgba(0, 0, 0, 0.4),
+      0 10px 30px -12px rgba(0, 0, 0, 0.55);
+  }
+  .glass           { background-color: rgba(15, 23, 42, 0.55); }
+  .glass-raised    { background-color: rgba(30, 41, 59, 0.72); }
+  .glass-chip      { background-color: rgba(30, 41, 59, 0.6); color: var(--pti-ink); border-color: rgba(255, 255, 255, 0.1); }
+
+  .glass-interactive:hover { background-color: rgba(30, 41, 59, 0.82); }
+
+  /* Inputs — dark surface, same amber focus ring. */
+  .glass-input {
+    background-color: rgba(15, 23, 42, 0.55);
+    color: var(--pti-ink);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  .glass-input:hover { background-color: rgba(30, 41, 59, 0.72); }
+  .glass-input:focus { background-color: rgba(30, 41, 59, 0.85); }
+  .glass-input::placeholder { color: var(--pti-subtle); }
+
+  /* Chevron for native selects — lighter stroke so it's visible on dark. */
+  select.glass-input {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+  }
+
+  /* Buttons — keep the amber prominent button as-is (it's already colored).
+   * Standard btn-glass gets a dark translucent surface so it reads on dark. */
+  .btn-glass {
+    background-color: rgba(30, 41, 59, 0.72);
+    color: var(--pti-ink);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+  .btn-glass:hover { background-color: rgba(51, 65, 85, 0.82); }
+
+  /* Tailwind utility overrides — `!important` because these compete with
+   * inline styles and utility-level specificity from third-party rules. */
+  .bg-white           { background-color: #1e293b !important; }
+  .bg-white\/50       { background-color: rgba(30, 41, 59, 0.5)  !important; }
+  .bg-white\/60       { background-color: rgba(30, 41, 59, 0.6)  !important; }
+  .bg-white\/70       { background-color: rgba(30, 41, 59, 0.7)  !important; }
+  .bg-white\/85       { background-color: rgba(30, 41, 59, 0.85) !important; }
+  .bg-white\/90       { background-color: rgba(30, 41, 59, 0.9)  !important; }
+  .bg-slate-50        { background-color: rgba(30, 41, 59, 0.4)  !important; }
+  .bg-slate-50\/60    { background-color: rgba(30, 41, 59, 0.4)  !important; }
+  .bg-slate-100       { background-color: rgba(51, 65, 85, 0.7)  !important; }
+  .bg-slate-900       { background-color: #020617 !important; }
+  .bg-slate-900\/75   { background-color: rgba(2, 6, 23, 0.75)   !important; }
+
+  .text-slate-300     { color: #64748b  !important; }
+  .text-slate-400     { color: #94a3b8  !important; }
+  .text-slate-500     { color: #94a3b8  !important; }
+  .text-slate-600     { color: #cbd5e1  !important; }
+  .text-slate-700     { color: #e2e8f0  !important; }
+  .text-slate-800     { color: #f1f5f9  !important; }
+  .text-slate-900     { color: #f1f5f9  !important; }
+
+  /* Hover-color variants — Tailwind compiles `hover:text-slate-900` to a
+   * separate `.hover\:text-slate-900:hover` selector that our base overrides
+   * above don't catch. Without these the hover state paints dark text on
+   * a dark background (WCAG contrast failure). Keep the same light ink
+   * mapping on hover. */
+  .hover\:text-slate-700:hover { color: #e2e8f0 !important; }
+  .hover\:text-slate-800:hover { color: #f1f5f9 !important; }
+  .hover\:text-slate-900:hover { color: #ffffff !important; }
+  /* Amber hover states stay amber in dark mode — the amber-700/900 values
+   * are already high-contrast on a dark background (≈ 7:1), but bump to
+   * amber-300/400 for even better readability. */
+  .hover\:text-amber-600:hover { color: #fbbf24 !important; }
+  .hover\:text-amber-700:hover { color: #fbbf24 !important; }
+  .hover\:text-amber-900:hover { color: #fcd34d !important; }
+
+  /* Hover background variants — same story, Tailwind splits them into
+   * :hover-qualified selectors. */
+  .hover\:bg-white\/50:hover      { background-color: rgba(30, 41, 59, 0.6) !important; }
+  .hover\:bg-white\/60:hover      { background-color: rgba(30, 41, 59, 0.7) !important; }
+  .hover\:bg-white\/70:hover      { background-color: rgba(30, 41, 59, 0.8) !important; }
+  .hover\:bg-slate-50:hover       { background-color: rgba(51, 65, 85, 0.6) !important; }
+  .hover\:bg-slate-100:hover      { background-color: rgba(71, 85, 105, 0.7) !important; }
+
+  /* bg-slate-50 as a "subtle highlight" (selected menu items, modal
+   * footers) — in light mode it's barely-there gray; in dark we bump to
+   * a mid-slate overlay so it reads as a distinct surface. */
+  .bg-slate-50       { background-color: rgba(71, 85, 105, 0.45) !important; }
+  .bg-slate-50\/60   { background-color: rgba(71, 85, 105, 0.35) !important; }
+
+  /* Rose accents — error banners + Delete menuitems. Keep the tint but
+   * dim the background and lighten the ink so the result reads as
+   * "error" on a dark surface instead of a bright pink box. */
+  .bg-rose-50,
+  .bg-rose-50\/60           { background-color: rgba(190, 18, 60, 0.18) !important; }
+  .border-rose-200          { border-color: rgba(244, 63, 94, 0.35) !important; }
+  .text-rose-600            { color: #fb7185 !important; }
+  .text-rose-700            { color: #fb7185 !important; }
+  .text-rose-900            { color: #fecdd3 !important; }
+  .hover\:bg-rose-50:hover  { background-color: rgba(244, 63, 94, 0.22) !important; }
+
+  /* Amber accents — same treatment: PTI amber stays on-brand but we
+   * brighten the ink so it still hits 4.5:1 on a dark body. */
+  .bg-amber-50                { background-color: rgba(217, 119, 6, 0.14) !important; }
+  .text-amber-600             { color: #fbbf24 !important; }
+  .text-amber-700             { color: #fbbf24 !important; }
+  .text-amber-900             { color: #fcd34d !important; }
+
+  /* Emerald (won / shipped / NSF) — keep the green, lighten the ink. */
+  .text-emerald-600           { color: #34d399 !important; }
+  .text-emerald-700           { color: #34d399 !important; }
+
+  .border-slate-100      { border-color: rgba(255, 255, 255, 0.06) !important; }
+  .border-slate-200      { border-color: rgba(255, 255, 255, 0.1)  !important; }
+  .border-slate-200\/40  { border-color: rgba(255, 255, 255, 0.06) !important; }
+  .border-slate-200\/60  { border-color: rgba(255, 255, 255, 0.08) !important; }
+  .border-slate-200\/70  { border-color: rgba(255, 255, 255, 0.1)  !important; }
+  .border-slate-200\/80  { border-color: rgba(255, 255, 255, 0.12) !important; }
+  .border-slate-300      { border-color: rgba(255, 255, 255, 0.14) !important; }
+  .border-slate-300\/70  { border-color: rgba(255, 255, 255, 0.1)  !important; }
+  .border-slate-400      { border-color: rgba(255, 255, 255, 0.16) !important; }
+
+  .divide-slate-100       > * + *,
+  .divide-slate-200\/60   > * + *,
+  .divide-slate-200\/80   > * + * { border-color: rgba(255, 255, 255, 0.08) !important; }
+
+  /* Sticky table headers use `bg-white` for opaque-sticky effect. The
+   * overridden value above makes them dark; keep them slightly darker
+   * than the surrounding card so they read as a header. */
+  thead.bg-white { background-color: #0f172a !important; }
+
+  /* Step-2 resin cards use inline `bg-white/85` — swept by the override. */
+
+  /* Banner review (amber-tinted) — shift ink so it reads on dark. */
+  .banner-review { color: #fde68a; }
+
+  /* Avatar / theme-menu button in the Nav — opaque `bg-white` base gets
+   * swapped for a darker neutral so it still reads against the glass Nav. */
+  nav button[aria-label="Theme menu"] {
+    background-color: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.14) !important;
+    color: #cbd5e1;
+  }
+  nav button[aria-label="Theme menu"]:hover { background-color: #334155 !important; }
+
+  /* Toggle pills — off state reads cleanly on dark. The on (active)
+   * gradient already uses amber which contrasts fine on dark chrome. */
+  .toggle-pill {
+    background-color: rgba(30, 41, 59, 0.6);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #cbd5e1;
+  }
+  .toggle-pill::before { background-color: rgba(148, 163, 184, 0.5); }
+  .toggle-pill:hover {
+    background-color: rgba(51, 65, 85, 0.75);
+    color: #f1f5f9;
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  /* Theme-aware logomark — show the white-stroke variant, hide the
+   * dark-stroke default. */
+  .nav-logo-light { display: none; }
+  .nav-logo-dark  { display: block; }
+
+  /* Dashboard KPI icon badges — the light-mode tints (emerald-50 /
+   * amber-50 / slate-100 with `-700` borders) become almost-white dots
+   * on a dark card. Swap to dimmed color overlays so they still
+   * read as "the emerald icon" / "the amber icon" without being loud. */
+  .bg-emerald-50       { background-color: rgba(16, 185, 129, 0.15)  !important; }
+  .border-emerald-200,
+  .border-emerald-200\/60 { border-color: rgba(52, 211, 153, 0.3)     !important; }
+
+  .bg-amber-50         { background-color: rgba(217, 119, 6, 0.14)  !important; }
+  .border-amber-200,
+  .border-amber-200\/60 { border-color: rgba(251, 191, 36, 0.3)      !important; }
+}

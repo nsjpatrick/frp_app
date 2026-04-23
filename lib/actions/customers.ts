@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
-import { customerCreateSchema, contactSchema, type Contact } from '@/lib/validators/entities';
+import { customerCreateSchema, customerUpdateSchema, contactSchema, type Contact } from '@/lib/validators/entities';
 import { writeAuditEntry } from '@/lib/audit/audit-log';
 import { normalizePhone } from '@/lib/format';
 import { revalidatePath } from 'next/cache';
@@ -140,7 +140,10 @@ export async function listCustomers() {
   return db.customer.findMany({
     where: { tenantId: user.tenantId },
     orderBy: { createdAt: 'desc' },
-    include: { projects: { select: { id: true, name: true } } },
+    include: {
+      projects: { select: { id: true, name: true } },
+      _count: { select: { quotes: true } },
+    },
   });
 }
 
@@ -198,4 +201,109 @@ export async function addContactsToCustomer(formData: FormData) {
   });
 
   revalidatePath(`/customers/${customerId}`);
+}
+
+/**
+ * Edit a customer's company name + contact roster. Replaces the full
+ * contacts array with the submitted one, so the caller is expected to
+ * send the complete set (not a diff).
+ */
+export async function updateCustomer(formData: FormData) {
+  const user = await getSessionUser();
+
+  let contactsRaw: unknown[] = [];
+  try {
+    const json = String(formData.get('contactsJson') ?? '');
+    contactsRaw = json ? JSON.parse(json) : [];
+  } catch {
+    contactsRaw = [];
+  }
+
+  const parsed = customerUpdateSchema.parse({
+    customerId: formData.get('customerId'),
+    name: formData.get('name'),
+    contacts: contactsRaw,
+  });
+  const contacts = normalizeContacts(parsed.contacts);
+
+  const existing = await db.customer.findUnique({ where: { id: parsed.customerId } });
+  if (!existing || existing.tenantId !== user.tenantId) {
+    throw new Error('customer not found');
+  }
+
+  const primary = contacts[0];
+  await db.customer.update({
+    where: { id: parsed.customerId },
+    data: {
+      name: parsed.name.trim(),
+      contactName: primary.name,
+      contactEmail: primary.email || null,
+      contactPhone: primary.phone || null,
+      contacts: contacts as unknown as object,
+    },
+  });
+
+  await writeAuditEntry(db, {
+    entityType: 'Customer',
+    entityId: parsed.customerId,
+    actorUserId: user.id,
+    action: 'update',
+    diffJson: { name: parsed.name, contacts },
+  });
+
+  revalidatePath('/customers');
+  revalidatePath(`/customers/${parsed.customerId}`);
+}
+
+/**
+ * Delete a customer and everything underneath — projects, quotes,
+ * revisions, audit entries tied to quotes. Tenant-scoped every step.
+ * Wrapped in a transaction so a partial failure rolls back.
+ *
+ * Demo-friendly default: cascade. In a prod app we'd probably gate this
+ * behind a confirmation token or split into hard/soft delete.
+ */
+export async function deleteCustomer(formData: FormData) {
+  const user = await getSessionUser();
+  const customerId = String(formData.get('customerId') ?? '');
+
+  const customer = await db.customer.findUnique({
+    where: { id: customerId },
+    include: {
+      _count: { select: { projects: true, quotes: true } },
+    },
+  });
+  if (!customer || customer.tenantId !== user.tenantId) {
+    throw new Error('customer not found');
+  }
+
+  await db.$transaction(async (tx) => {
+    // Delete revisions, then quotes, then projects, then the customer. Direct
+    // order matters because FK constraints are RESTRICT by default.
+    const quotes = await tx.quote.findMany({
+      where: { customerId },
+      select: { id: true },
+    });
+    const quoteIds = quotes.map((q) => q.id);
+    if (quoteIds.length > 0) {
+      await tx.revision.deleteMany({ where: { quoteId: { in: quoteIds } } });
+      await tx.quote.deleteMany({ where: { id: { in: quoteIds } } });
+    }
+    await tx.project.deleteMany({ where: { customerId } });
+    await tx.customer.delete({ where: { id: customerId } });
+  });
+
+  await writeAuditEntry(db, {
+    entityType: 'Customer',
+    entityId: customerId,
+    actorUserId: user.id,
+    action: 'delete',
+    diffJson: {
+      name: customer.name,
+      cascadedProjects: customer._count.projects,
+      cascadedQuotes: customer._count.quotes,
+    },
+  });
+
+  revalidatePath('/customers');
 }

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Plus, Search, TrendingUp, CheckCircle2, Clock } from 'lucide-react';
+import { Plus, TrendingUp, CheckCircle2, Clock } from 'lucide-react';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { formatFormula, formatUSD } from '@/lib/format';
@@ -11,15 +11,17 @@ const STATUS_STYLE: Record<string, string> = {
   ENGINEERING:  'glass-chip glass-tinted-amber',
   BUILDING:     'glass-chip bg-sky-100/70 text-sky-900 border-sky-300/50',
   WON:          'glass-chip glass-tinted-emerald',
-  LOST:         'glass-chip bg-rose-100/70 text-rose-900 border-rose-300/50',
+  SHIPPED:      'glass-chip glass-tinted-emerald',
+  LOST:         'glass-chip glass-tinted-rose',
 };
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: 'Draft',
   SENT: 'Sent',
   ENGINEERING: 'Engineering',
-  BUILDING: 'Building',
+  BUILDING: 'Fabricating',
   WON: 'Won',
+  SHIPPED: 'Shipped',
   LOST: 'Lost',
 };
 
@@ -44,7 +46,9 @@ export default async function Dashboard() {
     db.quote.findMany({
       where: {
         ...tenantScope,
-        status: 'WON',
+        // WON and SHIPPED both count as closed revenue — a shipped tank
+        // is still a won deal, just further downstream.
+        status: { in: ['WON', 'SHIPPED'] },
         wonAt: { gte: yearStart, lt: yearEnd },
         totalPrice: { not: null },
       },
@@ -65,6 +69,8 @@ export default async function Dashboard() {
     db.quote.count({
       where: {
         ...tenantScope,
+        // Open pipeline = anything pre-terminal. BUILDING is the
+        // fabrication state (display label "Fabricating").
         status: { in: ['SENT', 'ENGINEERING', 'BUILDING'] },
       },
     }),
@@ -93,16 +99,12 @@ export default async function Dashboard() {
         <h1 className="text-[26px] font-semibold tracking-tight text-slate-900">Dashboard</h1>
         <div className="flex items-center gap-3 flex-1 justify-end">
           <form action="/quotes" method="get" className="relative flex-1 max-w-[560px]">
-            <Search
-              className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-              aria-hidden
-            />
             <input
               type="search"
               name="q"
               placeholder="Search quotes, customers, projects…"
               aria-label="Search quotes"
-              className="glass-input !pl-9 w-full"
+              className="glass-input w-full"
             />
           </form>
           <Link href="/quotes/new" className="btn-glass-prominent">

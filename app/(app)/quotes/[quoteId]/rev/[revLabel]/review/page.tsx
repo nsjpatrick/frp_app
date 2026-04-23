@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { WizardShell } from '@/components/wizard/WizardShell';
@@ -205,10 +205,10 @@ export default async function Review({ params }: { params: Promise<{ quoteId: st
         </a>
         <Link
           href={`/quotes/${quoteId}/rev/${revLabel}/send`}
-          className="btn-glass-prominent"
+          className="btn-glass-prominent !px-3"
+          aria-label="Next: confirm recipient"
         >
-          Next: Confirm Recipient
-          <ArrowRight className="w-4 h-4" strokeWidth={2.5} aria-hidden />
+          <ChevronRight className="w-5 h-5" strokeWidth={2.5} aria-hidden />
         </Link>
       </div>
     </WizardShell>

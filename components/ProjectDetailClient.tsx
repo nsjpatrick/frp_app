@@ -14,15 +14,17 @@ const STATUS_STYLE: Record<string, string> = {
   ENGINEERING:  'glass-chip glass-tinted-amber',
   BUILDING:     'glass-chip bg-sky-100/70 text-sky-900 border-sky-300/50',
   WON:          'glass-chip glass-tinted-emerald',
-  LOST:         'glass-chip bg-rose-100/70 text-rose-900 border-rose-300/50',
+  SHIPPED:      'glass-chip glass-tinted-emerald',
+  LOST:         'glass-chip glass-tinted-rose',
 };
 
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: 'Draft',
   SENT: 'Sent',
   ENGINEERING: 'Engineering',
-  BUILDING: 'Building',
+  BUILDING: 'Fabricating',
   WON: 'Won',
+  SHIPPED: 'Shipped',
   LOST: 'Lost',
 };
 
@@ -134,7 +136,7 @@ export function ProjectDetailClient({ project }: { project: Project }) {
       {project.quotes.length > 0 && (
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex flex-wrap gap-2">
-            {(['DRAFT', 'SENT', 'ENGINEERING', 'BUILDING', 'WON', 'LOST'] as const).map((s) =>
+            {(['DRAFT', 'SENT', 'ENGINEERING', 'BUILDING', 'WON', 'SHIPPED', 'LOST'] as const).map((s) =>
               counts[s] ? (
                 <span key={s} className={`${STATUS_STYLE[s]} text-[11.5px]`}>
                   {counts[s]} {STATUS_LABEL[s]}

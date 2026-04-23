@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { ChevronRight } from 'lucide-react';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { createQuote } from '@/lib/actions/quotes';
@@ -195,9 +196,8 @@ export default async function NewQuote({
                   </Link>
                   <form action={createQuote}>
                     <input type="hidden" name="customerId" value={selectedCustomer.id} />
-                    <button type="submit" className="btn-glass-prominent">
-                      Continue Without Project
-                      <span aria-hidden>→</span>
+                    <button type="submit" className="btn-glass-prominent !px-3" aria-label="Continue without project">
+                      <ChevronRight className="w-5 h-5" strokeWidth={2.5} aria-hidden />
                     </button>
                   </form>
                 </div>
@@ -226,9 +226,8 @@ export default async function NewQuote({
               >
                 Cancel
               </Link>
-              <button type="submit" className="btn-glass-prominent">
-                Open Configurator
-                <span aria-hidden>→</span>
+              <button type="submit" className="btn-glass-prominent !px-3" aria-label="Open configurator">
+                <ChevronRight className="w-5 h-5" strokeWidth={2.5} aria-hidden />
               </button>
             </div>
           </form>
