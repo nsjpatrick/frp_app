@@ -262,7 +262,7 @@ function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
                   <td className="px-5 py-3 font-mono text-[13px] whitespace-nowrap">
                     {q.revision ? (
                       <Link
-                        href={`/quotes/${q.id}/rev/${q.revision.label}/review`}
+                        href={`/quotes/${q.id}`}
                         className="text-slate-800 hover:text-amber-700 transition-colors"
                       >
                         {q.number}
@@ -289,7 +289,7 @@ function QuotesTable({ quotes }: { quotes: QuoteRow[] }) {
                   <td className="px-5 py-3 text-right">
                     {q.revision ? (
                       <Link
-                        href={`/quotes/${q.id}/rev/${q.revision.label}/review`}
+                        href={`/quotes/${q.id}`}
                         className="text-amber-700 hover:text-amber-900 text-[13px] font-medium whitespace-nowrap"
                       >
                         Open →
@@ -347,7 +347,7 @@ function QuoteCard({ quote }: { quote: QuoteRow }) {
         <div className="min-w-0">
           {quote.revision ? (
             <Link
-              href={`/quotes/${quote.id}/rev/${quote.revision.label}/review`}
+              href={`/quotes/${quote.id}`}
               className="font-mono tabular-nums text-[15px] text-slate-900 font-semibold hover:text-amber-700 transition-colors"
             >
               {quote.number}
@@ -415,7 +415,7 @@ function QuoteCard({ quote }: { quote: QuoteRow }) {
       <div className="mt-auto pt-4 border-t border-slate-200/80">
         {quote.revision ? (
           <Link
-            href={`/quotes/${quote.id}/rev/${quote.revision.label}/review`}
+            href={`/quotes/${quote.id}`}
             className="text-[13px] font-medium text-amber-700 hover:text-amber-900"
           >
             Open Quote →

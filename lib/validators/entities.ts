@@ -130,6 +130,10 @@ export const geometrySchema = z.object({
   topHead: z.enum(['flat', 'F_AND_D', 'conical', 'open_top_cover']),
   bottom: z.enum(['flat_ring_supported', 'dished', 'conical_drain', 'sloped']),
   freeboardIn: z.number().nonnegative(),
+  // Number of identical vessels on this quote. Multiplies pricing + shows
+  // a "Vessels (×N)" line item in the PDF / email when > 1. Default 1 so
+  // legacy revisions saved before this field existed keep rendering.
+  quantity: z.number().int().min(1).max(99).default(1),
   // Nozzle schedule — inlets, outlets, manways, vents, drains, etc.
   nozzles: z.array(nozzleSchema).default([]),
   // Interior mixing / flow baffles — common for agitated service. Count only

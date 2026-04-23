@@ -40,6 +40,12 @@ export async function GET(
         contactName: rev.quote.customer.contactName ?? null,
         contactEmail: rev.quote.customer.contactEmail ?? null,
         contactPhone: rev.quote.customer.contactPhone ?? null,
+        addressLine1: rev.quote.customer.addressLine1 ?? null,
+        addressLine2: rev.quote.customer.addressLine2 ?? null,
+        city:         rev.quote.customer.city         ?? null,
+        region:       rev.quote.customer.region       ?? null,
+        postalCode:   rev.quote.customer.postalCode   ?? null,
+        country:      rev.quote.customer.country      ?? null,
       },
       project: rev.quote.project
         ? {
