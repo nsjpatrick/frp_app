@@ -291,7 +291,10 @@ export function QuotePdfDocument({ data }: { data: QuotePdfData }) {
           <View style={styles.addressCol}>
             <Text style={styles.addressEyebrow}>Prepared For</Text>
             <Text style={styles.addressCompany}>{data.recipient.company}</Text>
-            {data.recipient.contactName ? <Text style={styles.addressLine}>{data.recipient.contactName}</Text> : null}
+            {data.recipient.companyAddressLines.map((line, i) => (
+              <Text key={i} style={styles.addressLine}>{line}</Text>
+            ))}
+            {data.recipient.contactName ? <Text style={[styles.addressLine, { marginTop: data.recipient.companyAddressLines.length > 0 ? 4 : 0 }]}>{data.recipient.contactName}</Text> : null}
             {data.recipient.email        ? <Text style={styles.addressLine}>{data.recipient.email}</Text> : null}
             {data.recipient.phone        ? <Text style={styles.addressLine}>{data.recipient.phone}</Text> : null}
             {data.recipient.siteAddress  ? <Text style={[styles.addressLine, { marginTop: 4, color: C.muted }]}>Site: {data.recipient.siteAddress}</Text> : null}
@@ -398,9 +401,21 @@ export function QuotePdfDocument({ data }: { data: QuotePdfData }) {
           <View style={styles.sectionRule} />
           <View style={styles.priceCard}>
             <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Vessel — materials, fabrication &amp; quality plan</Text>
-              <Text style={styles.priceValue}>{data.pricing.basePrice}</Text>
+              <Text style={styles.priceLabel}>
+                {data.pricing.quantity > 1
+                  ? 'Per vessel — materials, fabrication & quality plan'
+                  : 'Vessel — materials, fabrication & quality plan'}
+              </Text>
+              <Text style={styles.priceValue}>{data.pricing.unitPrice}</Text>
             </View>
+            {data.pricing.quantity > 1 && (
+              <View style={styles.priceRow}>
+                <Text style={styles.priceLabel}>
+                  Vessels (× {data.pricing.quantity})
+                </Text>
+                <Text style={styles.priceValue}>{data.pricing.lineExtended}</Text>
+              </View>
+            )}
             <View style={styles.priceRow}>
               <Text style={styles.priceLabel}>Freight allowance (F.O.B. Fairfield)</Text>
               <Text style={styles.priceValue}>{data.pricing.freight}</Text>
