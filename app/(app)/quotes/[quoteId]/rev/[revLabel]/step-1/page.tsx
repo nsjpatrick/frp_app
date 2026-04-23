@@ -4,9 +4,9 @@ import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { WizardShell } from '@/components/wizard/WizardShell';
 import { saveServiceStep } from '@/lib/actions/revisions';
-import { CHEMICAL_FAMILIES, CHEMICAL_FAMILY_LABEL } from '@/lib/catalog/seed-data';
 import { SiteLookupSection } from '@/components/wizard/SiteLookupSection';
 import { TankTypeSelect } from '@/components/wizard/TankTypeSelect';
+import { ChemistrySection } from '@/components/wizard/ChemistrySection';
 
 export default async function Step1({ params }: { params: Promise<{ quoteId: string; revLabel: string }> }) {
   const { quoteId, revLabel } = await params;
@@ -51,71 +51,15 @@ export default async function Step1({ params }: { params: Promise<{ quoteId: str
         </section>
 
         {/* ---------------------- Chemistry ---------------------- */}
-        <section>
-          <h3 className="section-head">Chemistry</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-            <div>
-              <label className="glass-label" htmlFor="chemical">Chemical</label>
-              <input
-                id="chemical"
-                name="chemical"
-                defaultValue={s.chemical ?? ''}
-                required
-                placeholder="e.g. H₂SO₄, NaOH, NaOCl"
-                className="glass-input"
-              />
-            </div>
-            <div>
-              <label className="glass-label" htmlFor="chemicalFamily">Chemical family</label>
-              <select
-                id="chemicalFamily"
-                name="chemicalFamily"
-                defaultValue={s.chemicalFamily ?? 'dilute_acid'}
-                className="glass-input"
-              >
-                {CHEMICAL_FAMILIES.map((f) => (
-                  <option key={f} value={f}>{CHEMICAL_FAMILY_LABEL[f] ?? f}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="glass-label" htmlFor="concentrationPct">Concentration (%)</label>
-              <input
-                id="concentrationPct"
-                type="number" step="any"
-                name="concentrationPct"
-                defaultValue={s.concentrationPct ?? ''}
-                placeholder="50"
-                className="glass-input"
-              />
-            </div>
-            <div>
-              <label className="glass-label" htmlFor="specificGravity">Specific gravity</label>
-              <input
-                id="specificGravity"
-                type="number" step="any"
-                name="specificGravity"
-                defaultValue={s.specificGravity ?? 1.0}
-                required
-                className="glass-input"
-              />
-            </div>
-          </div>
-
-          <div className="mt-5 flex items-center gap-3 flex-wrap">
-            <label className="toggle-pill">
-              <input
-                type="checkbox"
-                name="postCure"
-                defaultChecked={!!s.postCure}
-              />
-              <span>Post-Cure</span>
-            </label>
-            <span className="text-[13px] text-slate-500">
-              Heat cure after layup (typ. 180–220°F) to improve chemical and thermal performance.
-            </span>
-          </div>
-        </section>
+        <ChemistrySection
+          initial={{
+            chemical: s.chemical ?? '',
+            chemicalFamily: s.chemicalFamily ?? 'dilute_acid',
+            concentrationPct: s.concentrationPct != null ? String(s.concentrationPct) : '',
+            specificGravity: s.specificGravity != null ? String(s.specificGravity) : '1.0',
+            postCure: !!s.postCure,
+          }}
+        />
 
         {/* ---------------------- Conditions ---------------------- */}
         <section>

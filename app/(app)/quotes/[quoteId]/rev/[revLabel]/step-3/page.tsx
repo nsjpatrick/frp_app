@@ -1,10 +1,12 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ChevronRight } from 'lucide-react';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { WizardShell } from '@/components/wizard/WizardShell';
 import { saveResinStep } from '@/lib/actions/revisions';
-import { SEED_RESINS } from '@/lib/catalog/seed-data';
+import { SEED_RESINS, CHEMICAL_FAMILY_LABEL } from '@/lib/catalog/seed-data';
+import type { ChemicalFamily } from '@/lib/catalog/seed-data';
 import { filterByChemistry } from '@/lib/rules/compatibility';
 import { filterByCertifications } from '@/lib/rules/certification-filter';
 
@@ -32,14 +34,35 @@ export default async function Step3({ params }: { params: Promise<{ quoteId: str
   const service: any = rev.service ?? {};
   const certs: any = rev.certs ?? {};
 
-  const afterChem = filterByChemistry(SEED_RESINS, service.chemicalFamily, service.designTempF);
-  const eligible = filterByCertifications(afterChem, {
+  // We run the filters progressively so we can tell the rep *which* filter
+  // eliminated the last candidate when zero pass. Silent "no resins
+  // available" is the most common footgun in this step — it almost always
+  // means the chemicalFamily guess was wrong, the design temp is out of
+  // the V1 catalog's envelope, or a cert requirement has no overlap.
+  const certReqs = {
     asme_rtp1_class: certs.asmeRtp1Class ?? null,
     ansi_standards: certs.ansiStandards ?? [],
     nsf_ansi_61_required: !!certs.nsfAnsi61Required,
     nsf_ansi_61_target_temp_F: certs.nsfAnsi61TargetTempF,
     nsf_ansi_2_required: !!certs.nsfAnsi2Required,
-  }, service.designTempF);
+  };
+
+  const serviceIncomplete =
+    !service.chemicalFamily || service.designTempF == null;
+
+  // Isolate the temp filter from the chemistry-family filter so the zero-
+  // state can tell them apart. `filterByChemistry` combines both today;
+  // we emulate each half here.
+  const byFamilyOnly = service.chemicalFamily
+    ? SEED_RESINS.filter((r) =>
+        r.compatible_chemical_families.includes(service.chemicalFamily as ChemicalFamily),
+      )
+    : [];
+  const byFamilyAndTemp = byFamilyOnly.filter(
+    (r) => r.max_service_temp_F >= (service.designTempF ?? 0),
+  );
+  const afterChem = byFamilyAndTemp;
+  const eligible = filterByCertifications(afterChem, certReqs, service.designTempF);
 
   const w: any = rev.wallBuildup ?? {};
   const save = saveResinStep.bind(null, quoteId, revLabel);
@@ -57,16 +80,17 @@ export default async function Step3({ params }: { params: Promise<{ quoteId: str
       </header>
 
       {eligible.length === 0 ? (
-        <div className="banner-review">
-          <span className="shrink-0 text-xl leading-none" aria-hidden>⚠</span>
-          <div>
-            <strong className="font-semibold">No Eligible Resin.</strong>
-            <p className="mt-1 text-[14px] leading-relaxed">
-              The chemistry + certification combination eliminated all candidates from the V1 catalog.
-              This revision will be flagged for engineering review.
-            </p>
-          </div>
-        </div>
+        <ZeroStateDiagnostic
+          quoteId={quoteId}
+          revLabel={revLabel}
+          serviceIncomplete={serviceIncomplete}
+          chemicalFamily={service.chemicalFamily as ChemicalFamily | undefined}
+          designTempF={service.designTempF}
+          byFamilyOnly={byFamilyOnly.length}
+          byFamilyAndTemp={byFamilyAndTemp.length}
+          afterCerts={eligible.length}
+          certReqs={certReqs}
+        />
       ) : (
         <form action={save} className="space-y-6">
           <div className="flex items-center gap-2 text-[13px] text-slate-500">
@@ -134,5 +158,106 @@ export default async function Step3({ params }: { params: Promise<{ quoteId: str
         </form>
       )}
     </WizardShell>
+  );
+}
+
+/**
+ * Zero-state diagnostic. Tells the rep which filter emptied the candidate
+ * list so they know which control to relax. Three distinct cases:
+ *   a) Service inputs missing → send them back to Step 1.
+ *   b) Chemistry family itself matches zero resins at the design temp.
+ *      Typically means the temp is above the V1 catalog's envelope, or
+ *      the family was auto-chosen wrong. We show the current family +
+ *      the temp and a link back to Step 1.
+ *   c) Chemistry + temp match some resins, but the cert requirements
+ *      eliminated the rest. We show which cert is the culprit and a
+ *      link back to the cert section.
+ */
+function ZeroStateDiagnostic({
+  quoteId,
+  revLabel,
+  serviceIncomplete,
+  chemicalFamily,
+  designTempF,
+  byFamilyOnly,
+  byFamilyAndTemp,
+  certReqs,
+}: {
+  quoteId: string;
+  revLabel: string;
+  serviceIncomplete: boolean;
+  chemicalFamily: ChemicalFamily | undefined;
+  designTempF: number | null | undefined;
+  byFamilyOnly: number;
+  byFamilyAndTemp: number;
+  afterCerts: number;
+  certReqs: {
+    asme_rtp1_class: string | null;
+    nsf_ansi_61_required: boolean;
+    nsf_ansi_61_target_temp_F?: number;
+    nsf_ansi_2_required: boolean;
+  };
+}) {
+  const step1 = `/quotes/${quoteId}/rev/${revLabel}/step-1`;
+  const familyLabel = chemicalFamily ? CHEMICAL_FAMILY_LABEL[chemicalFamily] ?? chemicalFamily : '—';
+
+  let body: React.ReactNode;
+  if (serviceIncomplete) {
+    body = (
+      <>
+        <strong className="font-semibold">Service Conditions Missing.</strong>
+        <p className="mt-1 text-[14px] leading-relaxed">
+          We need a chemical family and design temperature before the resin list can filter.
+          {' '}
+          <Link href={step1} className="text-amber-700 font-medium underline-offset-2 hover:underline">
+            Finish Step 1
+          </Link> and come back.
+        </p>
+      </>
+    );
+  } else if (byFamilyOnly === 0) {
+    body = (
+      <>
+        <strong className="font-semibold">No resins compatible with {familyLabel}.</strong>
+        <p className="mt-1 text-[14px] leading-relaxed">
+          The V1 catalog doesn&apos;t include a resin rated for this family.
+          Double-check the chemical name in <Link href={step1} className="text-amber-700 font-medium underline-offset-2 hover:underline">Step 1</Link> — a different family (for example <em>Concentrated Acid</em> vs <em>Dilute Acid</em>) often unblocks the list.
+        </p>
+      </>
+    );
+  } else if (byFamilyAndTemp === 0) {
+    body = (
+      <>
+        <strong className="font-semibold">Design temp {designTempF}°F exceeds every {familyLabel} resin.</strong>
+        <p className="mt-1 text-[14px] leading-relaxed">
+          {byFamilyOnly} resin{byFamilyOnly === 1 ? '' : 's'} match the chemistry but none are rated to {designTempF}°F.
+          Drop the design temperature in <Link href={step1} className="text-amber-700 font-medium underline-offset-2 hover:underline">Step 1</Link>, or escalate — a specialty resin outside the V1 catalog may apply.
+        </p>
+      </>
+    );
+  } else {
+    const culprits: string[] = [];
+    if (certReqs.nsf_ansi_61_required) culprits.push('NSF/ANSI 61');
+    if (certReqs.nsf_ansi_2_required) culprits.push('NSF/ANSI 2');
+    if (certReqs.asme_rtp1_class) culprits.push(`ASME RTP-1 Class ${certReqs.asme_rtp1_class}`);
+    const list = culprits.length > 0 ? culprits.join(' + ') : 'the selected certifications';
+    body = (
+      <>
+        <strong className="font-semibold">Certifications eliminated every candidate.</strong>
+        <p className="mt-1 text-[14px] leading-relaxed">
+          {byFamilyAndTemp} resin{byFamilyAndTemp === 1 ? '' : 's'} pass the chemistry + design-temp filters, but none carry {list}.
+          Relax or remove one of those requirements in <Link href={step1} className="text-amber-700 font-medium underline-offset-2 hover:underline">Step 1 → Certifications</Link> to continue, or escalate for a specialty resin.
+        </p>
+      </>
+    );
+  }
+
+  return (
+    <div className="banner-review">
+      <span className="shrink-0 text-xl leading-none" aria-hidden>⚠</span>
+      <div>
+        {body}
+      </div>
+    </div>
   );
 }
