@@ -10,6 +10,17 @@ type Site = {
   wind:    { V: number; exposure: 'B' | 'C' | 'D'; Kzt: number; riskCategory: 'I' | 'II' | 'III' | 'IV' };
 };
 
+/**
+ * Either "use this number as-is" or leave blank. Seismic Ss/S1 and wind V
+ * start empty for fresh quotes so reps must either run the postal-code
+ * lookup or type the values in — no silent defaults that would otherwise
+ * let them advance past Step 1 without a real calculation. We serialize
+ * the form as `siteJson` only when all three are numeric; the submit
+ * button is tied to the same guard.
+ */
+const numStr = (n: number | null | undefined): string =>
+  n != null && Number.isFinite(n) ? String(n) : '';
+
 // Countries supported by Zippopotam.us that cover most real-world quotes.
 // US sits first / default because ASCE 7-22 seismic values only cover
 // US territory — non-US lookups will geocode but USGS returns nothing.
@@ -46,6 +57,12 @@ export function SiteLookupSection({
   defaultCountry?: string;
 }) {
   const [site, setSite]     = useState<Site>(initial);
+  // Numeric fields that MUST be filled by a real seismic/wind calculation
+  // live as strings so an empty input paints as empty rather than "0".
+  // Populated either by the postal-code lookup or direct entry.
+  const [ssStr, setSsStr] = useState<string>(numStr(initial.seismic?.Ss));
+  const [s1Str, setS1Str] = useState<string>(numStr(initial.seismic?.S1));
+  const [vStr,  setVStr]  = useState<string>(numStr(initial.wind?.V));
   const [country, setCountry] = useState(defaultCountry || 'US');
   const [postal, setPostal]   = useState(defaultPostal || '');
   const [lookupResult, setLookupResult] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -60,6 +77,8 @@ export function SiteLookupSection({
       const r = await lookupSiteByPostal(country, postal, site.seismic.siteClass, site.seismic.riskCategory);
       if ('seismic' in r) {
         setSite((s) => ({ ...s, seismic: { ...s.seismic, Ss: r.seismic.Ss, S1: r.seismic.S1 } }));
+        setSsStr(String(r.seismic.Ss));
+        setS1Str(String(r.seismic.S1));
         setLookupResult({ ok: true, msg: r.matchedAddress });
       } else {
         // Even on "unsupported country" we still surface the resolved
@@ -165,18 +184,30 @@ export function SiteLookupSection({
           <div>
             <label className="glass-label">Ss (g)</label>
             <input
-              type="number" step="any"
-              value={site.seismic.Ss}
-              onChange={(e) => setSite({ ...site, seismic: { ...site.seismic, Ss: Number(e.target.value) } })}
+              type="number" step="any" min="0"
+              required
+              value={ssStr}
+              onChange={(e) => {
+                setSsStr(e.target.value);
+                const n = Number(e.target.value);
+                if (Number.isFinite(n)) setSite({ ...site, seismic: { ...site.seismic, Ss: n } });
+              }}
+              placeholder="Run lookup"
               className="glass-input"
             />
           </div>
           <div>
             <label className="glass-label">S₁ (g)</label>
             <input
-              type="number" step="any"
-              value={site.seismic.S1}
-              onChange={(e) => setSite({ ...site, seismic: { ...site.seismic, S1: Number(e.target.value) } })}
+              type="number" step="any" min="0"
+              required
+              value={s1Str}
+              onChange={(e) => {
+                setS1Str(e.target.value);
+                const n = Number(e.target.value);
+                if (Number.isFinite(n)) setSite({ ...site, seismic: { ...site.seismic, S1: n } });
+              }}
+              placeholder="Run lookup"
               className="glass-input"
             />
           </div>
@@ -184,12 +215,16 @@ export function SiteLookupSection({
             <label className="glass-label">I<sub>e</sub></label>
             <input
               type="number" step="any"
+              required
               value={site.seismic.Ie}
               onChange={(e) => setSite({ ...site, seismic: { ...site.seismic, Ie: Number(e.target.value) } })}
               className="glass-input"
             />
           </div>
         </div>
+        <p className="text-[11.5px] text-slate-500 mt-2 leading-snug">
+          Ss + S₁ are mandatory — derive them from the ASCE 7-22 lookup above or a site-specific seismic study.
+        </p>
       </div>
 
       {/* Wind block */}
@@ -199,9 +234,15 @@ export function SiteLookupSection({
           <div>
             <label className="glass-label">Basic wind V (mph)</label>
             <input
-              type="number" step="any"
-              value={site.wind.V}
-              onChange={(e) => setSite({ ...site, wind: { ...site.wind, V: Number(e.target.value) } })}
+              type="number" step="any" min="0"
+              required
+              value={vStr}
+              onChange={(e) => {
+                setVStr(e.target.value);
+                const n = Number(e.target.value);
+                if (Number.isFinite(n)) setSite({ ...site, wind: { ...site.wind, V: n } });
+              }}
+              placeholder="mph"
               className="glass-input"
             />
           </div>

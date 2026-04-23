@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SessionProviderWrapper } from "@/components/SessionProviderWrapper";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -60,6 +61,9 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <SessionProviderWrapper>{children}</SessionProviderWrapper>
+        {/* Vercel Speed Insights — Core Web Vitals (LCP, CLS, INP, TTFB,
+            FCP) from real visits on Vercel. No-ops outside production. */}
+        <SpeedInsights />
       </body>
     </html>
   );

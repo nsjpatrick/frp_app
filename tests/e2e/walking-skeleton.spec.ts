@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 
 /**
  * End-to-end happy path: sign in, kick off a quote on a seeded project, walk
- * the 5-step wizard (Service → Geometry → Resin → Review → Customer&Project),
- * and verify the engineering JSON endpoint still serves the full payload.
+ * the 4-step wizard (Service → Geometry → Review → Customer&Project), and
+ * verify the engineering JSON endpoint still serves the full payload.
  *
  * Uses seeded data (mock-cust-00 / mock-proj-00-0) rather than exercising the
  * New Customer / New Project modals — those modals have their own portal +
@@ -17,7 +17,7 @@ test('sales rep walks a seeded project through the wizard to the send step', asy
   // First step is now Service (Customer & Project moved to the end of the flow).
   await expect(page).toHaveURL(/\/step-1$/);
 
-  // Step 1 — Service + certifications.
+  // Step 1 — Service + certifications + resin (now co-located on Chemistry).
   await page.fill('input[name=chemical]', 'H2SO4');
   await page.selectOption('select[name=chemicalFamily]', 'dilute_acid');
   await page.fill('input[name=concentrationPct]', '50');
@@ -26,20 +26,17 @@ test('sales rep walks a seeded project through the wizard to the send step', asy
   await page.fill('input[name=specificGravity]', '1.4');
   await page.fill('input[name=operatingPressurePsig]', '0');
   await page.fill('input[name=vacuumPsig]', '0');
+  // ASME RTP-1 Class dropdown only appears after picking the RTP-1 tank type.
+  await page.selectOption('select[name=tankType]', 'asme_rtp1_vessel');
   await page.selectOption('select[name=asmeRtp1Class]', 'II');
   await page.click('button:has-text("Next")');
   await expect(page).toHaveURL(/\/step-2$/);
 
-  // Step 2 — Geometry (accept defaults).
-  await page.click('button:has-text("Next")');
-  await expect(page).toHaveURL(/\/step-3$/);
-
-  // Step 3 — Resin (pick the first eligible).
-  await page.locator('input[name=resinId]').first().check();
+  // Step 2 — Geometry (accept defaults) → goes straight to Review.
   await page.click('button:has-text("Next")');
   await expect(page).toHaveURL(/\/review$/);
 
-  // Step 4 — Review page core assertions.
+  // Step 3 — Review page core assertions.
   await expect(page.locator('h2:has-text("Review & Generate")')).toBeVisible();
   await expect(page.locator('text=Preliminary — Engineering Review Required')).toBeVisible();
   await expect(page.locator('text=Structural Analysis (Preliminary)')).toBeVisible();
@@ -59,11 +56,11 @@ test('sales rep walks a seeded project through the wizard to the send step', asy
   expect(json.structural_analysis.wallThickness.shellThicknessIn).toBeGreaterThan(0);
   expect(['0.6D+W', '0.9D+1.0E']).toContain(json.structural_analysis.loadCombination.governingCase);
 
-  // Step 5 — Customer & Project confirmation. Fields prefilled from the
-  // seeded customer/project; Save & Send button present.
+  // Step 4 — Customer & Project confirmation. Fields prefilled from the
+  // seeded customer/project; Send Quote button present.
   await page.getByRole('link', { name: /Next: Confirm Recipient/ }).click();
   await expect(page).toHaveURL(/\/send$/);
   await expect(page.locator('h2:has-text("Customer & Project")')).toBeVisible();
   await expect(page.locator('input[name=contactEmail]')).toHaveValue(/@/);
-  await expect(page.getByRole('button', { name: /Save & Send Quote/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Send Quote/ })).toBeVisible();
 });
