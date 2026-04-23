@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { ArrowRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { WizardShell } from '@/components/wizard/WizardShell';
@@ -103,7 +103,7 @@ export default async function Step1({ params }: { params: Promise<{ quoteId: str
           </div>
 
           <div className="mt-5 flex items-center gap-3 flex-wrap">
-            <label className={`toggle-pill ${s.postCure ? 'on' : ''}`}>
+            <label className="toggle-pill">
               <input
                 type="checkbox"
                 name="postCure"
@@ -171,12 +171,12 @@ export default async function Step1({ params }: { params: Promise<{ quoteId: str
           </div>
 
           <div className="flex flex-wrap gap-2 mb-5">
-            <label className={`toggle-pill ${c.nsfAnsi61Required ? 'on' : ''}`}>
+            <label className="toggle-pill">
               <input type="checkbox" name="nsfAnsi61Required" defaultChecked={c.nsfAnsi61Required ?? false} />
               <span>NSF / ANSI 61</span>
               <span className="opacity-60 text-xs">potable water</span>
             </label>
-            <label className={`toggle-pill ${c.nsfAnsi2Required ? 'on' : ''}`}>
+            <label className="toggle-pill">
               <input type="checkbox" name="nsfAnsi2Required" defaultChecked={c.nsfAnsi2Required ?? false} />
               <span>NSF / ANSI 2</span>
               <span className="opacity-60 text-xs">food contact</span>
@@ -210,15 +210,15 @@ export default async function Step1({ params }: { params: Promise<{ quoteId: str
           <h3 className="section-head">Site &amp; Environmental</h3>
           <SiteLookupSection
             initial={site}
-            siteAddress={rev.quote.project?.siteAddress ?? ''}
+            defaultPostal={site?.postal?.code ?? ''}
+            defaultCountry={site?.postal?.country ?? 'US'}
           />
         </section>
 
         {/* ---------------------- Action row ---------------------- */}
         <div className="flex justify-end pt-4 border-t border-slate-200/60">
-          <button className="btn-glass-prominent">
-            Next
-            <ArrowRight className="w-4 h-4" strokeWidth={2.5} aria-hidden />
+          <button className="btn-glass-prominent !px-3" aria-label="Next step">
+            <ChevronRight className="w-5 h-5" strokeWidth={2.5} aria-hidden />
           </button>
         </div>
       </form>

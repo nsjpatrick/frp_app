@@ -143,8 +143,12 @@ export function BatchUploadContactsModal() {
             }}
           >
             <div
-              className="pointer-events-auto relative bg-white rounded-3xl border border-slate-200 w-full max-w-2xl max-h-[calc(100vh-4rem)] overflow-hidden flex flex-col"
+              className="pointer-events-auto relative bg-white rounded-3xl border border-slate-200 max-h-[calc(100vh-4rem)] overflow-hidden flex flex-col"
               style={{
+                // Fixed width — Safari was letting this stretch with the
+                // flex container in a way Chrome did not. `min(600px, …)`
+                // keeps the modal from overflowing on narrow viewports.
+                width: 'min(600px, calc(100vw - 2rem))',
                 boxShadow:
                   '0 30px 80px -20px rgba(15, 23, 42, 0.55), 0 4px 12px rgba(15, 23, 42, 0.10)',
               }}

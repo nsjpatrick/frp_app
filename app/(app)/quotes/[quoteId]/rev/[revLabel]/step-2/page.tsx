@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { ArrowRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { WizardShell } from '@/components/wizard/WizardShell';
@@ -107,7 +107,7 @@ export default async function Step2({ params }: { params: Promise<{ quoteId: str
             Common in agitated or mixed-flow service.
           </p>
           <div className="flex flex-wrap items-center gap-4">
-            <label className={`toggle-pill ${g.baffles ? 'on' : ''}`}>
+            <label className="toggle-pill">
               <input
                 type="checkbox"
                 name="baffles"
@@ -134,7 +134,7 @@ export default async function Step2({ params }: { params: Promise<{ quoteId: str
             Structural SS stand or skirt in place of a concrete pad.
           </p>
           <div className="flex flex-wrap items-center gap-4">
-            <label className={`toggle-pill ${g.stainlessStand ? 'on' : ''}`}>
+            <label className="toggle-pill">
               <input
                 type="checkbox"
                 name="stainlessStand"
@@ -156,9 +156,8 @@ export default async function Step2({ params }: { params: Promise<{ quoteId: str
         </section>
 
         <div className="flex justify-end pt-4 border-t border-slate-200/60">
-          <button className="btn-glass-prominent">
-            Next
-            <ArrowRight className="w-4 h-4" strokeWidth={2.5} aria-hidden />
+          <button className="btn-glass-prominent !px-3" aria-label="Next step">
+            <ChevronRight className="w-5 h-5" strokeWidth={2.5} aria-hidden />
           </button>
         </div>
       </form>

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { User } from 'lucide-react';
+import { ThemeMenu } from '@/components/ThemeMenu';
 
 const LINKS = [
   { href: '/dashboard', label: 'Dashboard' },
@@ -19,12 +19,25 @@ export function Nav({ userEmail }: { userEmail: string }) {
       <nav className="glass-raised flex items-center justify-between pl-3 pr-4 py-2.5 max-w-[1180px] mx-auto">
         <div className="flex items-center gap-5">
           <Link href="/dashboard" className="flex items-center gap-2.5 pl-1">
+            {/* Two copies of the logomark, one for each theme. CSS in
+                globals.css toggles `display` based on <html data-theme>,
+                so the logo stroke matches the Nav's background without
+                needing JS to sync on theme change. */}
             <Image
-              src="/PTI_logo.svg"
+              src="/icon-light.svg"
               alt="PTI"
               width={379}
               height={356}
-              className="h-8 w-8 object-contain"
+              className="h-8 w-8 object-contain nav-logo nav-logo-light"
+              priority
+            />
+            <Image
+              src="/icon-dark.svg"
+              alt=""
+              aria-hidden
+              width={379}
+              height={356}
+              className="h-8 w-8 object-contain nav-logo nav-logo-dark"
               priority
             />
             <div className="leading-tight hidden sm:block">
@@ -59,19 +72,10 @@ export function Nav({ userEmail }: { userEmail: string }) {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm text-slate-500 hidden md:inline">{userEmail}</span>
-          {/* Avatar — placeholder for a profile menu. Human glyph for now;
-              replaces the previous "Sign out" button. Menu wiring comes later. */}
-          <button
-            type="button"
-            aria-label="Account menu"
-            title={userEmail}
-            // Opaque — no backdrop-filter. Nav is already .glass-raised; a nested
-            // backdrop-blur disappears in Safari, so keep the avatar solid.
-            className="w-9 h-9 rounded-full flex items-center justify-center text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 transition-colors"
-            style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8), 0 1px 2px rgba(15,23,42,0.06)' }}
-          >
-            <User className="w-4 h-4" strokeWidth={2} />
-          </button>
+          {/* Avatar doubles as a theme picker (System / Light / Dark).
+              When a real profile menu ships this will either absorb these
+              options or move theme selection elsewhere. */}
+          <ThemeMenu userEmail={userEmail} />
         </div>
       </nav>
     </div>

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { listCustomers } from '@/lib/actions/customers';
 import { NewCustomerModal } from '@/components/NewCustomerModal';
 import { BatchUploadContactsModal } from '@/components/BatchUploadContactsModal';
+import { CustomerRowMenu } from '@/components/CustomerRowMenu';
 import { formatPhone } from '@/lib/format';
 
 export default async function Customers() {
@@ -10,15 +11,10 @@ export default async function Customers() {
   return (
     // Fit the page inside the viewport so only the table scrolls.
     <div className="flex flex-col gap-5" style={{ height: 'calc(100vh - 8rem)' }}>
-      <header className="flex items-end justify-between gap-4 flex-wrap shrink-0">
-        <div>
-          <h1 className="text-[26px] font-semibold tracking-tight text-slate-900">
-            Customers
-          </h1>
-          <p className="text-[14px] text-slate-500 mt-0.5">
-            All buyers with active or historical quotes.
-          </p>
-        </div>
+      <header className="flex items-center justify-between gap-4 flex-wrap shrink-0">
+        <h1 className="text-[26px] font-semibold tracking-tight text-slate-900">
+          Customers
+        </h1>
         <div className="flex items-center gap-3">
           <BatchUploadContactsModal />
           <NewCustomerModal />
@@ -47,7 +43,6 @@ export default async function Customers() {
                   <th className="px-5 py-3 font-semibold">Primary Contact</th>
                   <th className="px-5 py-3 font-semibold">Email</th>
                   <th className="px-5 py-3 font-semibold">Phone</th>
-                  <th className="px-5 py-3 font-semibold">Projects</th>
                   <th></th>
                 </tr>
               </thead>
@@ -114,16 +109,18 @@ export default async function Customers() {
                           <span className="text-slate-400 font-sans">—</span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-slate-600 text-[13px]">
-                        {c.projects.length}
-                      </td>
                       <td className="px-5 py-3 text-right">
-                        <Link
-                          href={`/customers/${c.id}`}
-                          className="text-amber-700 hover:text-amber-900 text-[13px] font-medium whitespace-nowrap"
-                        >
-                          Open →
-                        </Link>
+                        <CustomerRowMenu
+                          customerId={c.id}
+                          customerName={c.name}
+                          contacts={allContacts.map((x) => ({
+                            name:  String(x?.name  ?? ''),
+                            email: String(x?.email ?? ''),
+                            phone: String(x?.phone ?? ''),
+                          }))}
+                          projectCount={c.projects.length}
+                          quoteCount={(c as any)._count?.quotes ?? 0}
+                        />
                       </td>
                     </tr>
                   );

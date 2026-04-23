@@ -1,17 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="20 20 400 420" width="100%" height="100%">
+  <!-- Light-mode favicon: dark slate PTI mark on transparent, shown in
+       browsers set to prefers-color-scheme: light. -->
   <g fill="none" stroke="#293338" stroke-width="16" stroke-linecap="round">
-    
     <path d="M 100 420 L 100 200 A 150 150 0 1 1 250 350" />
     <path d="M 130 420 L 130 200 A 120 120 0 1 1 250 320" />
-    <path d="M 160 420 L 160 200 A 90 90 0 1 1 250 290" />
-    <path d="M 190 420 L 190 200 A 60 60 0 1 1 250 260" />
-    <path d="M 220 420 L 220 200 A 30 30 0 1 1 250 230" />
-
+    <path d="M 160 420 L 160 200 A  90  90 0 1 1 250 290" />
+    <path d="M 190 420 L 190 200 A  60  60 0 1 1 250 260" />
+    <path d="M 220 420 L 220 200 A  30  30 0 1 1 250 230" />
     <line x1="45" y1="350" x2="65" y2="350" />
     <line x1="45" y1="320" x2="65" y2="320" />
     <line x1="45" y1="290" x2="65" y2="290" />
     <line x1="45" y1="260" x2="65" y2="260" />
     <line x1="45" y1="230" x2="65" y2="230" />
-    
   </g>
 </svg>

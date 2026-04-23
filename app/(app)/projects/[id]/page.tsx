@@ -1,7 +1,25 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { ProjectDetailClient } from '@/components/ProjectDetailClient';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const project = await db.project.findUnique({
+    where: { id },
+    select: { name: true },
+  });
+  return {
+    title: project
+      ? `${project.name} | JobCalc Neo`
+      : 'Project | JobCalc Neo',
+  };
+}
 
 export default async function ProjectDetail({
   params,

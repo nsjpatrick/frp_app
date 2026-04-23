@@ -107,6 +107,7 @@ enum QuoteStatus {
   ENGINEERING
   BUILDING
   WON
+  SHIPPED
   LOST
 }
 
