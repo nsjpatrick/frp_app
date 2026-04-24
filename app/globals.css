@@ -58,6 +58,57 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
+/* ----------------------------------------------------------------------------
+ * Theme transition — cross-fade between light and dark.
+ *
+ * When `html[data-theme]` swaps, every rule scoped to a specific theme
+ * re-applies in one paint. A small cross-property transition on the
+ * surfaces that actually change color smooths the swap so it reads as a
+ * fade rather than a hard flip.
+ *
+ * Scoped narrowly: only the handful of selectors that carry a theme-
+ * dependent background / text / border / shadow. Applying `transition:
+ * all` globally would slow down every other interaction; applying it to
+ * every element would blow the compositor. The list below covers the
+ * surfaces + tokens a rep sees during a theme swap.
+ *
+ * Duration: 220ms — long enough to read as a fade, short enough to feel
+ * snappy. `ease-out` so the destination settles first.
+ *
+ * NOTE: initial page load also triggers this rule, but the CSS variables
+ * are resolved synchronously by the pre-hydration script before first
+ * paint, so there's no style change for the transition to animate from.
+ * Subsequent swaps (user clicks System / Light / Dark in the avatar
+ * menu) are the only time this fires.
+ * ------------------------------------------------------------------------- */
+body,
+.glass,
+.glass-raised,
+.glass-chip,
+.glass-tinted-amber,
+.glass-tinted-slate,
+.glass-tinted-emerald,
+.glass-tinted-rose,
+.btn-glass,
+.glass-input,
+.toggle-pill,
+.step-pill,
+.banner-review,
+.label-badge,
+.label-badge-auto,
+.label-badge-manual {
+  transition:
+    background-color 220ms ease-out,
+    color 220ms ease-out,
+    border-color 220ms ease-out,
+    box-shadow 220ms ease-out;
+}
+/* Elements that already own a `transition: all` (glass-interactive,
+ * toggle-pill, glass-input) keep theirs — the declarations above cascade
+ * with the existing `all` on those selectors, and since `all` already
+ * covers color/bg/border/box-shadow at the same duration as the hover
+ * transitions, theme swaps pick up the same smooth fade for free. */
+
 /* Ambient background — radial gradients so glass surfaces blur through color. */
 /* NOTE: no `background-attachment: fixed` — Safari cannot composite a child
  * backdrop-filter over a fixed background, resulting in cloudy/unblurred glass

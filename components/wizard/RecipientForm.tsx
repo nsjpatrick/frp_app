@@ -9,61 +9,18 @@ import { formatPhone } from '@/lib/phone';
  * RecipientForm — final step of the configurator. Editable recipient and
  * project info, pre-populated from the current Customer + Project records.
  *
- * On "Save & Send Quote" the form:
+ * On "Send Quote" the form:
  *   1. Calls the server action to persist any edits to Customer / Project.
- *   2. Kicks off the quote PDF download. Server replies with
- *      `Content-Disposition: attachment`, which tells every modern browser
- *      to save rather than navigate — so the current page stays put.
- *   3. Opens the mail client with a pre-filled draft (with a timed delay
- *      after the download fires — see `openMailto` comments).
+ *   2. Opens the mail client with a pre-filled draft.
  *
- * `mailto:` per RFC 6068 cannot carry attachments, so the PDF has to ride
- * along as a downloaded file the rep attaches manually. The body includes
- * a reminder line above the signature so that step isn't forgotten.
+ * The PDF is NOT attached — `mailto:` per RFC 6068 can't carry
+ * attachments, and the download-then-attach-reminder workaround we used
+ * to run was more noise than help. Reps download the PDF separately from
+ * the quote detail page (or from the Review step's preview link) and
+ * attach it to the draft themselves if they want to ship the formal
+ * document. The mailto body is a plain-text summary that stands on its
+ * own for quick sends.
  */
-
-/**
- * Kick off a PDF download that works in Chrome, Firefox, and Safari —
- * including after async work (server actions) has consumed the user-
- * gesture activation window.
- *
- * Two techniques in parallel:
- *  1. Programmatic anchor click with `download` attribute.
- *     Primary path. Works everywhere the server sends
- *     `Content-Disposition: attachment`. Does NOT navigate the current
- *     document — the response is saved to disk directly.
- *  2. Hidden iframe pointing at the same URL.
- *     Safari fallback. Older WebKit ignores `download` on programmatic
- *     clicks that happen outside the immediate user-gesture window, but
- *     it always honors `Content-Disposition: attachment` on an iframe
- *     navigation. Modern browsers coalesce the request and only a single
- *     download surfaces to the user.
- *
- * The iframe is removed after the download has had time to commit — too
- * early and Safari cancels before the file finishes landing.
- */
-function triggerPdfDownload(url: string, filename: string) {
-  // 1. Anchor click. Element must be in the DOM for Safari to honor it.
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.rel = 'noopener';
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-
-  // 2. Iframe fallback. Offscreen, zero-dim, src set last so the load
-  //    starts only after it's attached.
-  const iframe = document.createElement('iframe');
-  iframe.style.cssText =
-    'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:0;opacity:0;pointer-events:none;';
-  iframe.setAttribute('aria-hidden', 'true');
-  iframe.setAttribute('tabindex', '-1');
-  document.body.appendChild(iframe);
-  iframe.src = url;
-  setTimeout(() => iframe.remove(), 15_000);
-}
 
 export type ProjectOption = {
   id: string;
@@ -141,17 +98,11 @@ export function RecipientForm({
 
   const openMailto = () => {
     const subject = `Quote ${quoteNumber} – ${customerName}`;
-    const attachReminder =
-      `Please find the attached quote PDF (PTI-${quoteNumber}-Rev${revLabel}.pdf). ` +
-      `If it didn't auto-attach, it's saved in your Downloads folder.`;
     const body = mailtoBody
       .replace(/^Hi [^,]+,/m, `Hi ${contactName || customerName},`)
       .replace(/^Site: .*$/m, siteAddress ? `Site: ${siteAddress}` : '')
       .replace(/Thank you for the opportunity to quote the [^]+? project/m,
-               `Thank you for the opportunity to quote the ${projectName || '(your)'} project`)
-      // Insert the attach-reminder above the "Regards," signature block so
-      // the rep sees it while reviewing the draft.
-      .replace(/\n\nRegards,/m, `\n\n${attachReminder}\n\nRegards,`);
+               `Thank you for the opportunity to quote the ${projectName || '(your)'} project`);
     const url = `mailto:${encodeURIComponent(contactEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.location.href = url;
   };
@@ -162,28 +113,10 @@ export function RecipientForm({
     setPending(true);
     const formData = new FormData(e.currentTarget);
 
-    // We intentionally do NOT wrap this in React's `useTransition` — the
-    // transition scheduler defers follow-up work outside the current task,
-    // which in Safari causes the download-trigger click to lose its
-    // user-gesture activation and silently no-op. Plain async/await keeps
-    // the microtask chain tight enough for WebKit's transient-activation
-    // window (≈5s) to cover save → download → mailto.
     try {
       await saveRecipientForQuote(formData);
-
-      const pdfUrl = `/quotes/${quoteId}/rev/${revLabel}/quote.pdf`;
-      const filename = `PTI-${quoteNumber}-Rev${revLabel}.pdf`;
-      triggerPdfDownload(pdfUrl, filename);
-
       setSaved(true);
-
-      // Hold the mailto until the download response has had a moment to
-      // commit. `window.location.href = 'mailto:…'` is treated as an
-      // external-protocol navigation and can cancel still-pending same-
-      // origin fetches. 800ms is a safe floor — cold-start PDF renders
-      // measure ~1.5s the first time, but the browser's fetch has already
-      // been dispatched well before that.
-      setTimeout(openMailto, 800);
+      openMailto();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save.');
     } finally {
@@ -462,9 +395,9 @@ export function RecipientForm({
         <div className="flex items-start gap-2 text-[13px] text-emerald-700">
           <CheckCircle2 className="w-4 h-4 mt-0.5 flex-none" aria-hidden />
           <div>
-            <div>Saved — quote PDF downloaded to your Downloads folder.</div>
+            <div>Saved — mail draft opening in your default client.</div>
             <div className="text-emerald-800/80 text-[12.5px] mt-0.5">
-              Your mail client should now be open with the draft ready. Attach the PDF before sending — <code className="text-[11.5px]">mailto:</code> links cannot carry attachments.
+              Need the formal PDF? Grab it from the quote detail page and attach it to the draft before sending.
             </div>
           </div>
         </div>
