@@ -7,42 +7,61 @@ import { TickerValue } from '@/components/TickerValue';
 /**
  * LiveSummary — the right-rail price preview.
  *
- * Runs the V0 pricing engine client-side so the rep sees the
- * accessory-bump / cert-premium reflect in real time as they tweak
- * quantity (the only input wired to live updates for now; other fields
- * still take a Next→Back roundtrip). The server computes an initial
- * breakdown with the persisted state, and the rail re-computes on top
- * of a quantity override via the exposed `setQuantity` event.
+ * Runs the V0 pricing engine client-side so the rep sees every pricing-
+ * relevant change reflected in real time — not just between saved
+ * wizard steps. The server computes an initial breakdown from the
+ * persisted Revision state, and any form edit on Step 1 or Step 2
+ * broadcasts a `live-pricing:patch` CustomEvent via LivePricingSync.
+ * We merge those patches into a local overlay and re-run
+ * `computePricing` on every keystroke.
  *
- * The component listens for a global `live-pricing:quantity` CustomEvent
- * dispatched by Step 2's quantity input — that's how the two client
- * components talk without plumbing props through the server shell.
+ * Overlay pattern (not full replacement): we only merge the fields
+ * that are present in the patch, so a Step 2 change doesn't clobber
+ * persisted Step 1 values — the rep can bounce between steps and
+ * the rail stays internally consistent.
  */
 
 const NET_TERMS = ['Net 15', 'Net 30', 'Net 45', 'Net 60', 'Net 90'] as const;
 type NetTerm = (typeof NET_TERMS)[number];
 
+type PricingOverlay = Partial<{
+  geometry: Partial<PricingInputs['geometry']>;
+  service: Partial<PricingInputs['service']>;
+  certs: Partial<PricingInputs['certs']>;
+  wallBuildup: Partial<PricingInputs['wallBuildup']>;
+}>;
+
 export function LiveSummary({ inputs }: { inputs: PricingInputs }) {
-  const [overrideQty, setOverrideQty] = useState<number | null>(null);
+  const [overlay, setOverlay] = useState<PricingOverlay>({});
   const [term, setTerm] = useState<NetTerm>('Net 30');
 
-  // Listen for quantity changes from Step 2's input via a global custom
-  // event — avoids threading props through the server-rendered wizard
-  // shell. The event fires on every keystroke in the quantity field.
+  // Listen for the unified pricing patch broadcast by `LivePricingSync`
+  // (mounted inside Step 1 + Step 2 forms). Each patch is partial —
+  // merge-on-top so fields the current step doesn't own aren't zeroed.
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ quantity: number }>).detail;
-      if (detail && Number.isFinite(detail.quantity) && detail.quantity > 0) {
-        setOverrideQty(Math.floor(detail.quantity));
-      }
+      const detail = (e as CustomEvent<PricingOverlay>).detail;
+      if (!detail) return;
+      setOverlay((prev) => ({
+        geometry:     { ...prev.geometry,     ...detail.geometry     },
+        service:      { ...prev.service,      ...detail.service      },
+        certs:        { ...prev.certs,        ...detail.certs        },
+        wallBuildup:  { ...prev.wallBuildup,  ...detail.wallBuildup  },
+      }));
     };
-    window.addEventListener('live-pricing:quantity', handler);
-    return () => window.removeEventListener('live-pricing:quantity', handler);
+    window.addEventListener('live-pricing:patch', handler);
+    return () => window.removeEventListener('live-pricing:patch', handler);
   }, []);
 
-  const effectiveInputs: PricingInputs = overrideQty != null
-    ? { ...inputs, geometry: { ...inputs.geometry, quantity: overrideQty } }
-    : inputs;
+  const effectiveInputs: PricingInputs = useMemo(
+    () => ({
+      geometry:    { ...inputs.geometry,    ...overlay.geometry    },
+      service:     { ...inputs.service,     ...overlay.service     },
+      certs:       { ...inputs.certs,       ...overlay.certs       },
+      wallBuildup: { ...inputs.wallBuildup, ...overlay.wallBuildup },
+    }),
+    [inputs, overlay],
+  );
 
   const pricing = useMemo(() => computePricing(effectiveInputs), [effectiveInputs]);
 

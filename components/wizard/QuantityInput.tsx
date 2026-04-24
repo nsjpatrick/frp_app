@@ -3,14 +3,15 @@
 import { useState } from 'react';
 
 /**
- * QuantityInput — drop-in replacement for the plain <input> on Step 2's
- * Quantity field. Dispatches a `live-pricing:quantity` CustomEvent on
- * every keystroke so the right-rail `LiveSummary` can update in real
- * time without server roundtrips.
+ * QuantityInput — controlled number input for Step 2's Quantity field.
  *
- * Still a regular form control: `name="quantity"` and `type="number"`
- * so the surrounding Server-Action form submits the value the same way
- * the previous plain input did.
+ * Used to broadcast its own `live-pricing:quantity` CustomEvent for the
+ * right-rail preview. That's now handled by the generic `LivePricingSync`
+ * delegate listener on the form, which picks up quantity alongside every
+ * other pricing-relevant field. This component is kept as a client-side
+ * controlled input so the value renders cleanly through React's lifecycle
+ * (plain `<input defaultValue>` from a server component loses sync when
+ * the revision JSON changes underneath it).
  */
 export function QuantityInput({ defaultValue }: { defaultValue: number }) {
   const [value, setValue] = useState<string>(String(defaultValue));
@@ -23,15 +24,7 @@ export function QuantityInput({ defaultValue }: { defaultValue: number }) {
       step={1}
       name="quantity"
       value={value}
-      onChange={(e) => {
-        setValue(e.target.value);
-        const n = Number(e.target.value);
-        if (Number.isFinite(n) && n > 0) {
-          window.dispatchEvent(
-            new CustomEvent('live-pricing:quantity', { detail: { quantity: Math.floor(n) } }),
-          );
-        }
-      }}
+      onChange={(e) => setValue(e.target.value)}
       required
       className="glass-input"
     />

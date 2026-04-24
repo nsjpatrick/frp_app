@@ -6,6 +6,7 @@ import { WizardShell } from '@/components/wizard/WizardShell';
 import { saveGeometryStep } from '@/lib/actions/revisions';
 import { NozzleSchedule } from '@/components/wizard/NozzleSchedule';
 import { QuantityInput } from '@/components/wizard/QuantityInput';
+import { LivePricingSync } from '@/components/wizard/LivePricingSync';
 import { computeStepCompleteness, resolveGuardedStep } from '@/lib/revisions/completeness';
 
 const STAINLESS_LABEL: Array<[string, string]> = [
@@ -55,6 +56,7 @@ export default async function Step2({ params }: { params: Promise<{ quoteId: str
       </header>
 
       <form action={save} className="space-y-8">
+        <LivePricingSync />
 
         <section>
           <h3 className="section-head">Overall</h3>
