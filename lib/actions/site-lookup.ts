@@ -1,13 +1,27 @@
 'use server';
 
 import { auth } from '@/lib/auth';
-import { geocodeAddress, geocodePostalCode, fetchUsgsSeismic } from '@/lib/site-lookup';
+import {
+  geocodeAddress,
+  geocodePostalCode,
+  fetchUsgsSeismic,
+  lookupAsceWind,
+  type AsceWindLookup,
+} from '@/lib/site-lookup';
 
 export type SiteLookupResult = {
   lat: number;
   lng: number;
   matchedAddress: string;
   seismic: { Ss: number; S1: number; Fa: number; Fv: number };
+  /**
+   * ASCE 7-22 basic wind speed V (mph, 3-second gust) for the geocoded
+   * point, adjusted to the requested risk category. `null` when the
+   * lat/lng falls outside the covered zone map (typically a non-US
+   * point) — the UI keeps whatever manual value the rep has there in
+   * that case.
+   */
+  wind: AsceWindLookup | null;
 };
 
 // US territories that ASCE 7-22 seismic hazard maps cover. Anything else
@@ -31,14 +45,17 @@ export async function lookupSiteByAddress(
   if (siteClass === 'F') return { error: 'Site Class F requires site-specific hazard analysis' };
 
   const seismic = await fetchUsgsSeismic({ lat: geo.lat, lng: geo.lng, siteClass, riskCategory });
-  return { lat: geo.lat, lng: geo.lng, matchedAddress: geo.matchedAddress, seismic };
+  const wind = lookupAsceWind({ lat: geo.lat, lng: geo.lng, riskCategory });
+  return { lat: geo.lat, lng: geo.lng, matchedAddress: geo.matchedAddress, seismic, wind };
 }
 
 /**
- * Postal-code-driven lookup. Geocodes via Zippopotam.us and then asks USGS
- * for ASCE 7-22 seismic values. USGS only covers the US + territories;
+ * Postal-code-driven lookup. Geocodes via Zippopotam.us, pulls ASCE 7-22
+ * seismic values from USGS for the lat/lng, and looks up ASCE 7-22 wind
+ * V from the local zone map. USGS seismic only covers the US + territories;
  * for international postal codes we geocode successfully but surface a
- * clear message telling the rep to enter seismic values manually.
+ * clear message telling the rep to enter Ss/S1 manually. Wind comes back
+ * for any supported region since the zone map is self-contained.
  */
 export async function lookupSiteByPostal(
   countryCode: string,
@@ -64,5 +81,6 @@ export async function lookupSiteByPostal(
   }
 
   const seismic = await fetchUsgsSeismic({ lat: geo.lat, lng: geo.lng, siteClass, riskCategory });
-  return { lat: geo.lat, lng: geo.lng, matchedAddress: geo.matchedAddress, seismic };
+  const wind = lookupAsceWind({ lat: geo.lat, lng: geo.lng, riskCategory });
+  return { lat: geo.lat, lng: geo.lng, matchedAddress: geo.matchedAddress, seismic, wind };
 }

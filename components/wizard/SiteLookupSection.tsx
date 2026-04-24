@@ -76,10 +76,20 @@ export function SiteLookupSection({
     startTransition(async () => {
       const r = await lookupSiteByPostal(country, postal, site.seismic.siteClass, site.seismic.riskCategory);
       if ('seismic' in r) {
-        setSite((s) => ({ ...s, seismic: { ...s.seismic, Ss: r.seismic.Ss, S1: r.seismic.S1 } }));
+        setSite((s) => ({
+          ...s,
+          seismic: { ...s.seismic, Ss: r.seismic.Ss, S1: r.seismic.S1 },
+          wind:    { ...s.wind,    V: r.wind ? r.wind.V : s.wind.V },
+        }));
         setSsStr(String(r.seismic.Ss));
         setS1Str(String(r.seismic.S1));
-        setLookupResult({ ok: true, msg: r.matchedAddress });
+        if (r.wind) setVStr(String(r.wind.V));
+        setLookupResult({
+          ok: true,
+          msg: r.wind
+            ? `${r.matchedAddress} · Wind ${r.wind.V} mph (${r.wind.note})`
+            : `${r.matchedAddress} · Seismic populated. Wind outside zone map — enter manually.`,
+        });
       } else {
         // Even on "unsupported country" we still surface the resolved
         // place name so the rep can confirm geocoding worked.
@@ -133,14 +143,16 @@ export function SiteLookupSection({
             ) : (
               <>
                 <MapPin className="w-3.5 h-3.5" strokeWidth={2.5} aria-hidden />
-                Look up seismic
+                Look up hazards
               </>
             )}
           </button>
         </div>
         <p className="text-[11.5px] text-slate-500 mt-2 leading-snug">
-          USGS ASCE 7-22 hazard maps cover the US and US territories. International postal codes
-          will geocode but seismic values must be entered manually or derived from a site-specific study.
+          Pulls ASCE 7-22 seismic (USGS) + basic wind V (zone-based) for the
+          geocoded point. Coverage is US + territories — international postal
+          codes will geocode, but Ss/S₁/V must be entered manually or derived
+          from a site-specific study.
         </p>
       </div>
 
