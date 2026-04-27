@@ -7,7 +7,11 @@ import { saveGeometryStep } from '@/lib/actions/revisions';
 import { NozzleSchedule } from '@/components/wizard/NozzleSchedule';
 import { QuantityInput } from '@/components/wizard/QuantityInput';
 import { LivePricingSync } from '@/components/wizard/LivePricingSync';
+import { AccessoriesSection } from '@/components/wizard/AccessoriesSection';
+import { TankTypeDefaultsApplier } from '@/components/wizard/TankTypeDefaultsApplier';
 import { computeStepCompleteness, resolveGuardedStep } from '@/lib/revisions/completeness';
+import { accessoriesSchema } from '@/lib/validators/entities';
+import { getDefaultsForTankType } from '@/lib/catalog/tank-type-defaults';
 
 const STAINLESS_LABEL: Array<[string, string]> = [
   ['SS304',           '304'],
@@ -41,6 +45,18 @@ export default async function Step2({ params }: { params: Promise<{ quoteId: str
   if (allowed !== 'step-2') redirect(`/quotes/${quoteId}/rev/${revLabel}/${allowed}`);
 
   const g: any = rev.geometry ?? {};
+  const s: any = rev.service ?? {};
+  // Pre-populate the Accessories section with whatever the rev already
+  // has, falling back to the tank-type-specific defaults so a fresh quote
+  // (e.g. a Bryneer™ pick on Step 1) lands on Step 2 with everything
+  // sensibly filled in.
+  const accessoriesInitial = (() => {
+    if (g.accessories) {
+      const parsed = accessoriesSchema.safeParse(g.accessories);
+      if (parsed.success) return parsed.data;
+    }
+    return getDefaultsForTankType(s.tankType).accessories;
+  })();
   const save = saveGeometryStep.bind(null, quoteId, revLabel);
 
   return (
@@ -57,6 +73,7 @@ export default async function Step2({ params }: { params: Promise<{ quoteId: str
 
       <form action={save} className="space-y-8">
         <LivePricingSync />
+        <TankTypeDefaultsApplier />
 
         <section>
           <h3 className="section-head">Overall</h3>
@@ -141,6 +158,16 @@ export default async function Step2({ params }: { params: Promise<{ quoteId: str
               placeholder="4"
               aria-label="Number of baffles"
             />
+            <select
+              name="baffleType"
+              defaultValue={g.baffleType ?? 'plate'}
+              className="glass-input shrink-0"
+              style={{ width: '120px' }}
+              aria-label="Baffle type"
+            >
+              <option value="plate">Plate</option>
+              <option value="wedge">Wedge</option>
+            </select>
           </div>
         </section>
 
@@ -168,6 +195,8 @@ export default async function Step2({ params }: { params: Promise<{ quoteId: str
             </select>
           </div>
         </section>
+
+        <AccessoriesSection initial={accessoriesInitial} />
 
         <div className="flex justify-end pt-4 border-t border-slate-200/60">
           <button className="btn-glass-prominent !px-3" aria-label="Next step">

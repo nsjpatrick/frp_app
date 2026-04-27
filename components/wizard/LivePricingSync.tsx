@@ -78,6 +78,25 @@ export function LivePricingSync() {
       }
       if (nozzles) geometry.nozzles = nozzles;
 
+      // Accessories — same JSON-in-hidden-input pattern as nozzles, so any
+      // toggle in `AccessoriesSection` re-broadcasts the whole accessory
+      // bundle and the rail re-prices instantly.
+      try {
+        const raw = get('accessoriesJson');
+        if (raw) {
+          const parsed = JSON.parse(String(raw));
+          if (parsed && typeof parsed === 'object') {
+            geometry.accessories = parsed;
+          }
+        }
+      } catch {
+        /* ignore — bad JSON just means stale broadcast */
+      }
+      if (form.querySelector('select[name="baffleType"]')) {
+        const bt = String(get('baffleType') ?? 'plate');
+        if (bt === 'plate' || bt === 'wedge') geometry.baffleType = bt;
+      }
+
       // Service — just the knobs pricing engine uses. Chemistry name /
       // family / concentration don't affect price; only `postCure` does.
       const service: Record<string, unknown> = {};

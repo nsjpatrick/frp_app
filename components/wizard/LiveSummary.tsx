@@ -66,11 +66,17 @@ export function LiveSummary({ inputs }: { inputs: PricingInputs }) {
   const pricing = useMemo(() => computePricing(effectiveInputs), [effectiveInputs]);
 
   const usd = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+  const detail = pricing.detail;
 
   return (
     <div className="space-y-4 text-[13px]">
-      <div className="text-[10px] font-semibold tracking-widest uppercase text-amber-700">
-        Live Quote — V0 Pricing
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] font-semibold tracking-widest uppercase text-amber-700">
+          Live Quote — JobCalc 12.2.99
+        </div>
+        <div className="text-[9px] font-mono text-slate-400">
+          v1.0
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -81,6 +87,49 @@ export function LiveSummary({ inputs }: { inputs: PricingInputs }) {
           </div>
         ))}
       </div>
+
+      {detail && (
+        <details className="group rounded-lg bg-slate-50/70 border border-slate-200/80 px-3 py-2">
+          <summary className="cursor-pointer list-none flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-700">
+            <span>Cost detail</span>
+            <span className="text-slate-400 group-open:rotate-90 transition-transform">›</span>
+          </summary>
+          <div className="mt-2 space-y-1.5 text-[12px]">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Labor hours</span>
+              <span className="font-mono text-slate-700">
+                {detail.totalAdjustedLaborHrs.toFixed(1)} hr
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Labor cost</span>
+              <span className="font-mono text-slate-700">{usd(detail.laborAmountUsd)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Material cost</span>
+              <span className="font-mono text-slate-700">{usd(detail.materialAmountUsd)}</span>
+            </div>
+            <div className="flex justify-between border-t border-slate-200/60 pt-1.5">
+              <span className="text-slate-500">Cost subtotal</span>
+              <span className="font-mono text-slate-800 font-semibold">
+                {usd(detail.grandTankCostUsd)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Sales uplift</span>
+              <span className="font-mono text-slate-700">+{usd(detail.salesUpliftUsd)}</span>
+            </div>
+            <div className="flex justify-between text-[11px] text-slate-400 pt-1">
+              <span>Resin</span>
+              <span className="font-mono">${detail.resinPricePerLb.toFixed(2)}/lb</span>
+            </div>
+            <div className="flex justify-between text-[11px] text-slate-400">
+              <span>Line items</span>
+              <span className="font-mono">{detail.lineItems.length}</span>
+            </div>
+          </div>
+        </details>
+      )}
 
       <div className="pt-3 border-t border-slate-200/80 space-y-1.5">
         <div className="flex items-baseline justify-between">

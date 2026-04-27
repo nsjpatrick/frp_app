@@ -9,6 +9,7 @@ import { TankTypeSelect } from '@/components/wizard/TankTypeSelect';
 import { ChemistrySection } from '@/components/wizard/ChemistrySection';
 import { RtpClassFields } from '@/components/wizard/RtpClassFields';
 import { LivePricingSync } from '@/components/wizard/LivePricingSync';
+import { TankTypeDefaultsApplier } from '@/components/wizard/TankTypeDefaultsApplier';
 
 export default async function Step1({ params }: { params: Promise<{ quoteId: string; revLabel: string }> }) {
   const { quoteId, revLabel } = await params;
@@ -51,6 +52,7 @@ export default async function Step1({ params }: { params: Promise<{ quoteId: str
 
       <form action={save} className="space-y-9">
         <LivePricingSync />
+        <TankTypeDefaultsApplier />
 
         {/* ---------------------- Tank type ---------------------- */}
         <section>

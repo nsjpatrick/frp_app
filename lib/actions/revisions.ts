@@ -86,6 +86,16 @@ export async function saveGeometryStep(quoteId: string, label: string, formData:
   const rev = await loadRevision(quoteId, label, user.tenantId);
 
   const quantityRaw = Number(formData.get('quantity'));
+  // Accessories are serialized as JSON by `AccessoriesSection`; bad JSON
+  // falls through the schema's `.default({})` so we never block the form.
+  const accessories = (() => {
+    try {
+      const raw = formData.get('accessoriesJson');
+      return raw ? JSON.parse(String(raw)) : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
   const geometry = geometrySchema.parse({
     orientation: formData.get('orientation'),
     idIn: Number(formData.get('idIn')),
@@ -104,10 +114,12 @@ export async function saveGeometryStep(quoteId: string, label: string, formData:
     })(),
     baffles: formData.get('baffles') === 'on',
     baffleCount: formData.get('baffles') === 'on' ? Number(formData.get('baffleCount') || 0) : 0,
+    baffleType: (formData.get('baffleType') as 'plate' | 'wedge' | null) ?? 'plate',
     stainlessStand: formData.get('stainlessStand') === 'on',
     stainlessGrade: formData.get('stainlessStand') === 'on'
       ? (formData.get('stainlessGrade') as string | null) || null
       : null,
+    accessories,
   });
 
   await db.revision.update({ where: { id: rev.id }, data: { geometry } });

@@ -5,6 +5,7 @@ import {
   computeStepCompleteness,
   type StepPath,
 } from '@/lib/revisions/completeness';
+import { getDefaultsForTankType } from '@/lib/catalog/tank-type-defaults';
 
 const STEPS: Array<{ n: number; label: string; path: StepPath }> = [
   { n: 1, label: 'Service & Certifications', path: 'step-1' },
@@ -72,13 +73,31 @@ export async function WizardShell({
     where: { quoteId_label: { quoteId, label: revLabel } },
     include: { quote: true },
   });
+  // Pricing inputs for the rail's first paint. When a field hasn't been
+  // persisted yet (e.g. Step 2 hasn't been saved on a fresh Bryneer quote)
+  // we fall back to the tank-type's default accessories so the rail shows
+  // the Bryneer-package price the AccessoriesSection is about to display
+  // — otherwise the rail flashes a bare-tank number until the rep
+  // touches any field and triggers `LivePricingSync`.
   const pricingInputs = rev && !summary
-    ? {
-        geometry: (rev.geometry ?? {}) as any,
-        service: (rev.service ?? {}) as any,
-        certs: (rev.certs ?? {}) as any,
-        wallBuildup: (rev.wallBuildup ?? {}) as any,
-      }
+    ? (() => {
+        const service: any = rev.service ?? {};
+        const geom: any = rev.geometry ?? {};
+        const tankDefaults = getDefaultsForTankType(service.tankType);
+        return {
+          geometry: {
+            ...geom,
+            accessories: geom.accessories ?? tankDefaults.accessories,
+            // Same backfill for nozzles — Step 2 may not have been saved.
+            nozzles: Array.isArray(geom.nozzles) && geom.nozzles.length > 0
+              ? geom.nozzles
+              : tankDefaults.geometry.nozzles,
+          } as any,
+          service: rev.service as any,
+          certs: rev.certs as any,
+          wallBuildup: rev.wallBuildup as any,
+        };
+      })()
     : null;
 
   const completeness = rev
