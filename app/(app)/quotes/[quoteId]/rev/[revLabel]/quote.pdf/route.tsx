@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { buildQuotePdfData } from '@/lib/outputs/quote-pdf-data';
 import { QuotePdfDocument } from '@/lib/outputs/QuotePdfDocument';
+import { findSalesEngineer } from '@/lib/catalog/sales-engineers';
 import { renderToStream } from '@react-pdf/renderer';
 import { NextResponse } from 'next/server';
 
@@ -63,11 +64,20 @@ export async function GET(
       geometry: rev.geometry,
       wallBuildup: rev.wallBuildup,
     },
-    salesRep: {
-      name: user.name ?? 'Sales, Plas-Tanks Industries',
-      email: user.email,
-      phone: '513-874-5047',
-    },
+    // Sales Engineer block — when the rep picked one on the Send step,
+    // we read it from `rev.outputs.salesEngineerId` so the customer-
+    // facing PDF shows the assigned engineer's contact info instead
+    // of the session user's. Fallback keeps legacy revs renderable.
+    salesRep: (() => {
+      const seId = (rev.outputs as { salesEngineerId?: string } | null)?.salesEngineerId;
+      const se = findSalesEngineer(seId);
+      if (se) return { name: se.name, email: se.email, phone: se.phone };
+      return {
+        name: user.name ?? 'Sales, Plas-Tanks Industries',
+        email: user.email,
+        phone: '513-874-5047',
+      };
+    })(),
   });
 
   // renderToStream returns a Node Readable. Convert to a Web ReadableStream

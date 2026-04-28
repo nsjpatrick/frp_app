@@ -144,6 +144,9 @@ export function buildEngineeringJson(
      *  Quote PDF intentionally ignores this field; engineering, ops, and
      *  the JSON download are the only consumers. */
     engineering_notes: rev.outputs?.engineeringNotes ?? null,
+    /** PTI Sales Engineer assigned to this quote, picked on the Send step.
+     *  Drives the customer-facing PDF "Sales Engineer" block. */
+    sales_engineer: rev.outputs?.salesEngineerId ?? null,
 
     checksum_sha256: null,
   };

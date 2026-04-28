@@ -15,29 +15,32 @@ describe('Empty / partial inputs — progressive pricing', () => {
     expect(out.detail.lineItems).toHaveLength(0);
   });
 
-  it('still returns the freight floor on totalDelivered when nothing is filled', () => {
+  it('totalDelivered is also $0 (no freight floor) when geometry is missing', () => {
+    // Per the "no price until height + diameter" product rule the engine
+    // strictly returns 0 across the board — including freight — until
+    // both vessel dimensions are entered. Avoids showing the rep a non-
+    // zero number on a quote that has no real sizing yet.
     const out = computePricing({ geometry: {}, service: {}, certs: {}, wallBuildup: {} });
-    expect(out.totalDelivered).toBe(out.freight);
+    expect(out.totalDelivered).toBe(0);
+    expect(out.freight).toBe(0);
   });
 
-  it('pricing rises monotonically as the rep fills in geometry', () => {
-    const empty   = computePricing({ geometry: {},                       service: {}, certs: {}, wallBuildup: {} });
-    const idOnly  = computePricing({ geometry: { idIn: 96 },             service: {}, certs: {}, wallBuildup: {} });
-    const sized   = computePricing({ geometry: { idIn: 96, ssHeightIn: 144 }, service: {}, certs: {}, wallBuildup: {} });
-    // Empty: nothing to price.
-    expect(empty.unitPrice).toBe(0);
-    // Diameter-only: ring-stand fires (cost is diameter-keyed only).
-    expect(idOnly.unitPrice).toBeGreaterThan(0);
-    // Full sizing: shell fabrication + heads kick in, price climbs further.
-    expect(sized.unitPrice).toBeGreaterThan(idOnly.unitPrice);
+  it('pricing stays at $0 with only one of diameter/SS-height set', () => {
+    // The engine guard requires BOTH to engage, since either alone is
+    // insufficient to compute shell area / labor / heads.
+    const idOnly      = computePricing({ geometry: { idIn: 96 },             service: {}, certs: {}, wallBuildup: {} });
+    const heightOnly  = computePricing({ geometry: { ssHeightIn: 144 },      service: {}, certs: {}, wallBuildup: {} });
+    const sized       = computePricing({ geometry: { idIn: 96, ssHeightIn: 144 }, service: {}, certs: {}, wallBuildup: {} });
+    expect(idOnly.unitPrice).toBe(0);
+    expect(heightOnly.unitPrice).toBe(0);
+    expect(sized.unitPrice).toBeGreaterThan(0);
     expect(sized.detail.lineItems.find((l) => l.key.startsWith('shell_fab_'))).toBeTruthy();
   });
 
-  it('accessories alone (no geometry) still produce a price floor', () => {
+  it('accessories alone (no geometry) stay at $0 — guard is geometry-first', () => {
     const out = computePricing({
       geometry: {
         accessories: {
-          // Only a SmartBob, nothing else
           manway: { type: 'none', diameterIn: 24, rtp1Style: false },
           vents: [], dipPipes: [], blindFlanges: [],
           sightGlass: { enabled: false, sizeIn: 1 },
@@ -69,9 +72,11 @@ describe('Empty / partial inputs — progressive pricing', () => {
       certs: {},
       wallBuildup: {},
     });
-    // SmartBob alone should produce a non-zero price.
-    expect(out.unitPrice).toBeGreaterThan(0);
-    expect(out.detail.lineItems.find((l) => l.key === 'smartbob:binmaster_ao')).toBeTruthy();
+    // Accessories selected but no diameter/height → engine returns $0
+    // and produces no line items (the rep can't price options against
+    // a vessel that doesn't have a size yet).
+    expect(out.unitPrice).toBe(0);
+    expect(out.detail.lineItems).toHaveLength(0);
   });
 });
 

@@ -89,8 +89,11 @@ export async function resetRevisionToDefaults(quoteId: string, label: string) {
   const accessories = accessoriesSchema.parse(d.accessories);
   const geometry: any = {
     orientation: d.geometry.orientation,
-    idIn: d.geometry.idIn,
-    ssHeightIn: d.geometry.ssHeightIn,
+    // FRP Vessel defaults leave size empty so the rep must enter
+    // diameter + SS-height before pricing engages. Anything previously
+    // saved gets blown away here so a reset truly returns to "blank".
+    idIn: d.geometry.idIn ?? null,
+    ssHeightIn: d.geometry.ssHeightIn ?? null,
     freeboardIn: d.geometry.freeboardIn,
     quantity: 1,
     doubleWall: d.geometry.doubleWall,

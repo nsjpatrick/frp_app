@@ -89,6 +89,34 @@ export type PricingBreakdown = {
 export function computePricing(inputs: PricingInputs): PricingBreakdown {
   const quantity = Math.max(1, Math.floor(Number(inputs.geometry?.quantity) || 1));
 
+  // Without real diameter and SS-height the engine has nothing to size
+  // against (no shell area, no head area, no labor). Returning a fully-
+  // zeroed breakdown lets the LiveSummary rail render $0 cleanly while
+  // the rep is still entering Step 1, instead of computing tiny default-
+  // freight-only totals or NaN-spamming the breakdown.
+  const idIn       = Number(inputs.geometry?.idIn);
+  const ssHeightIn = Number(inputs.geometry?.ssHeightIn);
+  if (!Number.isFinite(idIn) || idIn <= 0 || !Number.isFinite(ssHeightIn) || ssHeightIn <= 0) {
+    return {
+      unitPrice: 0,
+      unitLines: [],
+      quantity,
+      extendedPrice: 0,
+      freight: 0,
+      totalDelivered: 0,
+      detail: {
+        laborAmountUsd:        0,
+        materialAmountUsd:     0,
+        grandTankCostUsd:      0,
+        salesUpliftUsd:        0,
+        laborHoursAdjusted:    { shellFab: 0, finishing: 0, fittings: 0, indirect: 0 },
+        totalAdjustedLaborHrs: 0,
+        resinPricePerLb:       0,
+        lineItems:             [],
+      },
+    };
+  }
+
   // 1. Build the line items the wizard's current state implies.
   const lines = buildAllLines(inputs);
 

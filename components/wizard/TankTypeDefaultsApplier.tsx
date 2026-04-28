@@ -74,9 +74,12 @@ export function TankTypeDefaultsApplier() {
       setNative('orientation',            d.geometry.orientation);
       // Step 1 size inputs are in feet — defaults are in inches, so divide
       // by 12 before writing. The form's own onSubmit handler converts
-      // them back to inches for the schema.
-      setNative('idFt',                   d.geometry.idIn        / 12);
-      setNative('ssHeightFt',             d.geometry.ssHeightIn  / 12);
+      // them back to inches for the schema. `null` defaults (FRP Vessel)
+      // mean "no opinion" — leave whatever the rep typed alone so a
+      // round-trip through the FRP option doesn't clobber an in-progress
+      // size, and a fresh quote stays empty.
+      if (d.geometry.idIn       != null) setNative('idFt',       d.geometry.idIn       / 12);
+      if (d.geometry.ssHeightIn != null) setNative('ssHeightFt', d.geometry.ssHeightIn / 12);
       setNative('freeboardFt',            d.geometry.freeboardIn / 12);
       setNative('topHead',                d.geometry.topHead);
       setNative('bottom',                 d.geometry.bottom);
@@ -114,8 +117,8 @@ export function TankTypeDefaultsApplier() {
           detail: {
             geometry: {
               orientation: d.geometry.orientation,
-              idIn: d.geometry.idIn,
-              ssHeightIn: d.geometry.ssHeightIn,
+              ...(d.geometry.idIn       != null ? { idIn:       d.geometry.idIn       } : {}),
+              ...(d.geometry.ssHeightIn != null ? { ssHeightIn: d.geometry.ssHeightIn } : {}),
               accessories: d.accessories,
               nozzles: d.geometry.nozzles,
             },
