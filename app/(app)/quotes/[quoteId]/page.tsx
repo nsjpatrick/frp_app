@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Download, FileText, Pencil, Eye, Building2, User as UserIcon } from 'lucide-react';
+import { ArrowLeft, Download, FileText, Eye, Building2, User as UserIcon } from 'lucide-react';
 import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { QuoteStatusSelect } from '@/components/QuoteStatusSelect';
 import { QuoteRowMenu } from '@/components/QuoteRowMenu';
+import { EditRevisionButton } from '@/components/EditRevisionButton';
 import { formatUSD } from '@/lib/format';
 import { TANK_TYPE_BY_ID } from '@/lib/catalog/tank-types';
 import { computePricing } from '@/lib/pricing/pricing-engine';
@@ -230,14 +231,10 @@ export default async function QuoteDetail({
                       PDF
                     </Link>
                     {isLatest && (
-                      <Link
-                        href={`/quotes/${quote.id}/rev/${rev.label}/step-1`}
-                        className="btn-glass !px-2.5 !py-1.5 !text-[12.5px]"
-                        aria-label={`Edit Rev ${rev.label}`}
-                      >
-                        <Pencil className="w-3.5 h-3.5" aria-hidden />
-                        Edit
-                      </Link>
+                      <EditRevisionButton
+                        quoteId={quote.id}
+                        currentLabel={rev.label}
+                      />
                     )}
                   </div>
                 </div>

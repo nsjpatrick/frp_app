@@ -21,7 +21,7 @@ import { TickerValue } from '@/components/TickerValue';
  * the rail stays internally consistent.
  */
 
-const NET_TERMS = ['Net 15', 'Net 30', 'Net 45', 'Net 60', 'Net 90'] as const;
+const NET_TERMS = ['Net 30', 'Net 60'] as const;
 type NetTerm = (typeof NET_TERMS)[number];
 
 type PricingOverlay = Partial<{
@@ -66,11 +66,17 @@ export function LiveSummary({ inputs }: { inputs: PricingInputs }) {
   const pricing = useMemo(() => computePricing(effectiveInputs), [effectiveInputs]);
 
   const usd = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+  const detail = pricing.detail;
 
   return (
     <div className="space-y-4 text-[13px]">
-      <div className="text-[10px] font-semibold tracking-widest uppercase text-amber-700">
-        Live Quote — V0 Pricing
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] font-semibold tracking-widest uppercase text-amber-700">
+          Live Quote — JobCalc 12.2.99
+        </div>
+        <div className="text-[9px] font-mono text-slate-400">
+          v1.0
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -81,6 +87,45 @@ export function LiveSummary({ inputs }: { inputs: PricingInputs }) {
           </div>
         ))}
       </div>
+
+      {detail && (
+        <details className="cost-detail">
+          <summary>
+            <span>Cost detail</span>
+            <span className="chevron" aria-hidden>›</span>
+          </summary>
+          <div className="cost-detail-body">
+            <div className="cost-detail-row">
+              <span className="label">Labor hours</span>
+              <span className="value">{detail.totalAdjustedLaborHrs.toFixed(1)} hr</span>
+            </div>
+            <div className="cost-detail-row">
+              <span className="label">Labor cost</span>
+              <span className="value">{usd(detail.laborAmountUsd)}</span>
+            </div>
+            <div className="cost-detail-row">
+              <span className="label">Material cost</span>
+              <span className="value">{usd(detail.materialAmountUsd)}</span>
+            </div>
+            <div className="cost-detail-row total">
+              <span className="label">Cost subtotal</span>
+              <span className="value">{usd(detail.grandTankCostUsd)}</span>
+            </div>
+            <div className="cost-detail-row">
+              <span className="label">Sales uplift</span>
+              <span className="value">+{usd(detail.salesUpliftUsd)}</span>
+            </div>
+            <div className="cost-detail-row subtle" style={{ paddingTop: '0.25rem' }}>
+              <span className="label">Resin</span>
+              <span className="value">${detail.resinPricePerLb.toFixed(2)}/lb</span>
+            </div>
+            <div className="cost-detail-row subtle">
+              <span className="label">Line items</span>
+              <span className="value">{detail.lineItems.length}</span>
+            </div>
+          </div>
+        </details>
+      )}
 
       <div className="pt-3 border-t border-slate-200/80 space-y-1.5">
         <div className="flex items-baseline justify-between">

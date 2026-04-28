@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 
 /**
@@ -50,6 +50,19 @@ const EMPTY_ROW: NozzleRow = { type: 'inlet', sizeNps: '2"', rating: '150#', qua
 
 export function NozzleSchedule({ initial }: { initial: NozzleRow[] }) {
   const [rows, setRows] = useState<NozzleRow[]>(initial);
+
+  // Listen for `tank-type:apply-defaults` (broadcast by both the
+  // TankTypeDefaultsApplier on type change AND the Reset-all button)
+  // so the schedule re-syncs when defaults are pushed in. A Reset
+  // payload arrives with `nozzles: []`, which clears every row.
+  useEffect(() => {
+    const onDefaults = (e: Event) => {
+      const detail = (e as CustomEvent<{ nozzles?: NozzleRow[] }>).detail;
+      if (Array.isArray(detail?.nozzles)) setRows(detail.nozzles);
+    };
+    window.addEventListener('tank-type:apply-defaults', onDefaults);
+    return () => window.removeEventListener('tank-type:apply-defaults', onDefaults);
+  }, []);
 
   const addRow = () => setRows((r) => [...r, { ...EMPTY_ROW }]);
   const removeRow = (idx: number) => setRows((r) => r.filter((_, i) => i !== idx));

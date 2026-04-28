@@ -185,6 +185,15 @@ export async function setQuoteStatus(formData: FormData) {
 
   const quote = await loadQuoteForTenant(quoteId, user.tenantId);
 
+  // DRAFT is a one-way door: once a quote leaves DRAFT (typically via
+  // Complete-and-Save → SENT) it can't be walked back. Reverting would
+  // misrepresent customer-facing state and erase the audit signal that
+  // the quote was issued. The dropdown also hides DRAFT in this case;
+  // the server-side check is the authoritative gate.
+  if (status === 'DRAFT' && quote.status !== 'DRAFT') {
+    throw new Error('Cannot revert a sent quote back to draft.');
+  }
+
   // SHIPPED is the post-WON terminal state — the deal is still won for
   // revenue purposes, so we treat both as "counts as won" when stamping
   // wonAt. Transitioning to anything else clears it.

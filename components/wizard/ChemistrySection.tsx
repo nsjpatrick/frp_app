@@ -10,6 +10,7 @@ import {
 } from '@/lib/catalog/seed-data';
 import type { ChemicalFamily } from '@/lib/catalog/seed-data';
 import { lookupChemicalWithMeta } from '@/lib/chemistry/chemical-registry';
+import { VEIL_OPTIONS } from '@/lib/pricing/jobcalc-catalog';
 
 /**
  * Pick the most compatible resin for a given chemical family.
@@ -24,8 +25,10 @@ import { lookupChemicalWithMeta } from '@/lib/chemistry/chemical-registry';
  */
 function pickBestResin(family: ChemicalFamily | string | null | undefined): SeedResin | null {
   if (!family) return null;
-  const compatible = SEED_RESINS.filter((r) =>
-    r.compatible_chemical_families.includes(family as ChemicalFamily),
+  // Stay within the jobcalc-active set — auto-pick a resin that's no
+  // longer in PTI's catalog would be a bad recommendation.
+  const compatible = SEED_RESINS.filter(
+    (r) => r.jobcalcActive && r.compatible_chemical_families.includes(family as ChemicalFamily),
   );
   if (compatible.length === 0) return null;
   const sorted = [...compatible].sort(
@@ -60,6 +63,7 @@ export function ChemistrySection({ initial }: {
     specificGravity: string;
     postCure: boolean;
     resinId: string;            // '' when no prior selection
+    veilId: string;             // '' when no prior selection — defaults to "1 Ply C Glass"
   };
 }) {
   const [chemical, setChemical]       = useState(initial.chemical);
@@ -73,6 +77,19 @@ export function ChemistrySection({ initial }: {
   );
   const [postCure, setPostCure]       = useState(initial.postCure);
   const [resinId, setResinId]         = useState(initial.resinId);
+  const [veilId,  setVeilId]          = useState(initial.veilId || 'c_glass_1');
+
+  // Listen for tank-type defaults so a type change repaints the veil
+  // alongside the resin without needing a manual click.
+  useEffect(() => {
+    const onDefaults = (e: Event) => {
+      const detail = (e as CustomEvent<{ wallBuildup?: { veilId?: string } }>).detail;
+      const next = detail?.wallBuildup?.veilId;
+      if (next) setVeilId(next);
+    };
+    window.addEventListener('tank-type:apply-defaults', onDefaults);
+    return () => window.removeEventListener('tank-type:apply-defaults', onDefaults);
+  }, []);
   const [resinMode, setResinMode]     = useState<'auto' | 'manual'>(
     // Same pattern as family: if a resin was previously saved, start in
     // auto so a re-computation can kick in when family changes. If nothing
@@ -113,10 +130,17 @@ export function ChemistrySection({ initial }: {
   // Group resins into "compatible with current family" vs the rest, so
   // the dropdown shows matches first but still lets the rep reach any
   // resin in the catalog. Re-evaluates whenever `family` changes.
+  //
+  // The dropdown only surfaces `jobcalcActive` resins — these are the
+  // entries from jobcalc12.2.99.xls "Raw Materials"!B4:H20 that aren't
+  // marked discontinued (no strikethrough / no `xxx` price). Persisted
+  // revisions that reference an older legacy resin keep working
+  // throughout the rest of the app — only the dropdown is filtered.
   const resinGroups = useMemo(() => {
     const compatible: SeedResin[] = [];
     const other: SeedResin[] = [];
     for (const r of SEED_RESINS) {
+      if (!r.jobcalcActive) continue;
       if (r.compatible_chemical_families.includes(family as ChemicalFamily)) {
         compatible.push(r);
       } else {
@@ -155,7 +179,12 @@ export function ChemistrySection({ initial }: {
   return (
     <section>
       <h3 className="section-head">Chemistry</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+      {/* Four-up at lg+ so chemical name + family + concentration % +
+          specific gravity sit on a single row. Falls back to two columns
+          on md and stacked on small screens. `items-end` bottom-justifies
+          the inputs so labels of varying length don't shift the input
+          baseline up or down between cells. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
         <div>
           <label className="glass-label" htmlFor="chemical">Chemical</label>
           <input
@@ -176,17 +205,6 @@ export function ChemistrySection({ initial }: {
             placeholder="e.g. HCl, H₂SO₄, NaOCl, NaOH"
             className="glass-input"
           />
-          {match && (
-            <div className="mt-2 flex items-start gap-1.5 text-[12.5px] text-amber-700">
-              <Sparkles className="w-3.5 h-3.5 mt-0.5 flex-none" strokeWidth={2} aria-hidden />
-              <span>
-                Recognized as <span className="font-semibold">{match.display}</span>. {match.note}
-                {concentrationMatters && concentrationNum == null && (
-                  <> <span className="text-amber-800/80">Add a concentration % for a sharper match.</span></>
-                )}
-              </span>
-            </div>
-          )}
         </div>
 
         <div>
@@ -208,23 +226,13 @@ export function ChemistrySection({ initial }: {
               setFamilyMode('manual');
             }}
             className="glass-input"
+            required
           >
+            <option value="" disabled>Select…</option>
             {CHEMICAL_FAMILIES.map((f) => (
               <option key={f} value={f}>{CHEMICAL_FAMILY_LABEL[f] ?? f}</option>
             ))}
           </select>
-          {manualOverride && (
-            <div className="mt-2 text-[12px] text-slate-500">
-              Overriding suggested{' '}
-              <button
-                type="button"
-                onClick={() => { setFamily(match!.family); setFamilyMode('auto'); }}
-                className="text-amber-700 font-medium underline-offset-2 hover:underline"
-              >
-                {CHEMICAL_FAMILY_LABEL[match!.family]}
-              </button>.
-            </div>
-          )}
         </div>
 
         <div>
@@ -247,15 +255,51 @@ export function ChemistrySection({ initial }: {
             type="number"
             step="any"
             name="specificGravity"
-            defaultValue={initial.specificGravity || '1.0'}
+            defaultValue={initial.specificGravity}
             required
             className="glass-input"
+            placeholder="e.g. 1.20"
           />
         </div>
 
-        {/* Resin auto-pick + override — spans both columns so the dropdown
-            has room to show the supplier alongside the resin name. */}
-        <div className="md:col-span-2">
+        {/* Auxiliary chemistry hints — pulled out of the input cells so
+            cell heights stay equal and all four inputs above bottom-align.
+            Renders only when there's actually a hint to show, so the row
+            collapses cleanly on a brand-new quote. */}
+        {(match || manualOverride) && (
+          <div className="md:col-span-2 lg:col-span-4 -mt-1 space-y-1">
+            {match && (
+              <div className="flex items-start gap-1.5 text-[12.5px] text-amber-700">
+                <Sparkles className="w-3.5 h-3.5 mt-0.5 flex-none" strokeWidth={2} aria-hidden />
+                <span>
+                  Recognized as <span className="font-semibold">{match.display}</span>. {match.note}
+                  {concentrationMatters && concentrationNum == null && (
+                    <> <span className="text-amber-800/80">Add a concentration % for a sharper match.</span></>
+                  )}
+                </span>
+              </div>
+            )}
+            {manualOverride && (
+              <div className="text-[12px] text-slate-500">
+                Overriding suggested{' '}
+                <button
+                  type="button"
+                  onClick={() => { setFamily(match!.family); setFamilyMode('auto'); }}
+                  className="text-amber-700 font-medium underline-offset-2 hover:underline"
+                >
+                  {CHEMICAL_FAMILY_LABEL[match!.family]}
+                </button>.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Resin + Veil — share a row so the corrosion-barrier layup
+            (resin chemistry + surface veil) is configured side-by-side.
+            Auxiliary hints (auto/manual override, "cheapest compatible
+            with…", veil notes) live in a follow-up row outside the
+            grid so the two select inputs bottom-align via `items-end`. */}
+        <div className="md:col-span-2 lg:col-span-2">
           <label className="glass-label" htmlFor="resinId">
             Resin
             {resinMode === 'auto' && !!bestResin && (
@@ -280,7 +324,7 @@ export function ChemistrySection({ initial }: {
               <optgroup label="Compatible with current chemistry">
                 {resinGroups.compatible.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.name} · {r.supplier} · max {r.max_service_temp_F}°F
+                    {r.name} · max {r.max_service_temp_F}°F
                   </option>
                 ))}
               </optgroup>
@@ -289,41 +333,83 @@ export function ChemistrySection({ initial }: {
               <optgroup label="Other resins (not typical for this chemistry)">
                 {resinGroups.other.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.name} · {r.supplier} · max {r.max_service_temp_F}°F
+                    {r.name} · max {r.max_service_temp_F}°F
                   </option>
                 ))}
               </optgroup>
             )}
           </select>
-          {selectedResin && !resinNotCompatible && resinMode === 'auto' && (
-            <div className="mt-2 text-[12.5px] text-slate-500">
-              Cheapest resin compatible with{' '}
-              <span className="font-medium text-slate-700">
-                {CHEMICAL_FAMILY_LABEL[family as ChemicalFamily] ?? family}
-              </span>
-              .
-            </div>
-          )}
-          {resinManualOverride && bestResin && (
-            <div className="mt-2 text-[12px] text-slate-500">
-              Overriding suggested{' '}
-              <button
-                type="button"
-                onClick={() => { setResinId(bestResin.id); setResinMode('auto'); }}
-                className="text-amber-700 font-medium underline-offset-2 hover:underline"
-              >
-                {bestResin.name}
-              </button>
-              .
-            </div>
-          )}
-          {resinNotCompatible && (
-            <div className="mt-2 text-[12px] text-rose-700">
-              {selectedResin!.name} is not rated for{' '}
-              {CHEMICAL_FAMILY_LABEL[family as ChemicalFamily] ?? family}. Confirm with engineering before sending.
-            </div>
-          )}
         </div>
+
+        {/* Surface veil — Quote2!B25 dropdown. Default "1 Ply 'C' Glass"
+            matches jobcalc's NewText!B38. */}
+        <div className="md:col-span-2 lg:col-span-2">
+          <label className="glass-label" htmlFor="veilId">Veil</label>
+          <select
+            id="veilId"
+            name="veilId"
+            value={veilId}
+            onChange={(e) => setVeilId(e.target.value)}
+            className="glass-input"
+            required
+          >
+            {VEIL_OPTIONS.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label} · ${v.costPerSqft.toFixed(2)}/sqft
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Resin + veil hint row — pulled out of the input cells so the
+            two selects above stay bottom-aligned regardless of which
+            hint is showing. Renders only when there's actually copy to
+            show. */}
+        {(
+          (selectedResin && !resinNotCompatible && resinMode === 'auto') ||
+          (resinManualOverride && bestResin) ||
+          resinNotCompatible ||
+          VEIL_OPTIONS.find((x) => x.id === veilId)?.notes
+        ) && (
+          <div className="md:col-span-2 lg:col-span-4 -mt-1 space-y-1">
+            {selectedResin && !resinNotCompatible && resinMode === 'auto' && (
+              <div className="text-[12.5px] text-slate-500">
+                Cheapest resin compatible with{' '}
+                <span className="font-medium text-slate-700">
+                  {CHEMICAL_FAMILY_LABEL[family as ChemicalFamily] ?? family}
+                </span>
+                .
+              </div>
+            )}
+            {resinManualOverride && bestResin && (
+              <div className="text-[12px] text-slate-500">
+                Overriding suggested{' '}
+                <button
+                  type="button"
+                  onClick={() => { setResinId(bestResin.id); setResinMode('auto'); }}
+                  className="text-amber-700 font-medium underline-offset-2 hover:underline"
+                >
+                  {bestResin.name}
+                </button>
+                .
+              </div>
+            )}
+            {resinNotCompatible && (
+              <div className="text-[12px] text-rose-700">
+                {selectedResin!.name} is not rated for{' '}
+                {CHEMICAL_FAMILY_LABEL[family as ChemicalFamily] ?? family}. Confirm with engineering before sending.
+              </div>
+            )}
+            {(() => {
+              const v = VEIL_OPTIONS.find((x) => x.id === veilId);
+              return v?.notes ? (
+                <p className="text-[12px] text-slate-500 leading-snug">
+                  <span className="font-medium text-slate-600">Veil — </span>{v.notes}
+                </p>
+              ) : null;
+            })()}
+          </div>
+        )}
       </div>
 
       <div className="mt-5 flex items-center gap-3 flex-wrap">

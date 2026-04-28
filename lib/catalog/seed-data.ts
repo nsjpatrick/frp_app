@@ -27,60 +27,185 @@ export type SeedResin = {
   price_per_lb: number;
   compatible_chemical_families: string[];
   certifications: ResinCertifications;
+  /**
+   * Whether this resin is on the active jobcalc12.2.99.xls
+   * "Raw Materials"!B4:H20 list (no strikethrough / no `xxx` price).
+   * The chemistry-step dropdown only surfaces these so reps don't pick a
+   * resin that's been retired from PTI's actual catalog. Older resins are
+   * kept here for backwards-compat with persisted revisions, but they
+   * stay hidden from the new-quote flow.
+   */
+  jobcalcActive?: boolean;
 };
 
 // ─── Expanded V1 catalog ────────────────────────────────────────────────────
-// Hand-curated from public supplier data sheets. Prices are representative
-// 2025 Q3 indicative ranges and will be replaced by live price-feed data in
-// Plan 5. Citations: Ashland Derakane Chemical Resistance Guide, AOC Hetron &
-// Vipel PPGs, Reichhold Dion PPGs, Polynt composites, Interplastic Silmar.
+// Hand-curated from public supplier data sheets. Prices for the
+// `jobcalcActive` rows match 'Raw Materials'!D4:D20 from
+// jobcalc12.2.99.xls (Updated 2024-08-15). Older / discontinued resins —
+// the rows with `xxx` in the Excel price column — are kept here for
+// backwards-compat with persisted revisions but stay hidden from new
+// quote dropdowns. Citations: Ashland Derakane Chemical Resistance
+// Guide, AOC Hetron & Vipel PPGs, Reichhold Dion PPGs, Aliancys Atlac.
 export const SEED_RESINS: SeedResin[] = [
-  // ── Ashland Derakane family ────────────────────────────────────────
+  // ─── JobCalc actives ─────────────────────────────────────────────
+  // These are the only resins surfaced in the chemistry dropdown of a
+  // new quote. Prices come straight from the Excel Raw Materials sheet.
+  {
+    id: 'aropol-q-6376',
+    name: 'Aropol Q-6376 (Iso Bulk)',
+    supplier: 'Ashland',
+    family: 'iso_polyester',
+    max_service_temp_F: 180,
+    density_lb_ft3: 73,
+    price_per_lb: 2.88,
+    compatible_chemical_families: ['dilute_acid', 'caustic', 'potable_water'],
+    certifications: {
+      nsf_ansi_61: { listed: false },
+      nsf_ansi_2: { listed: false },
+      asme_rtp1_class_eligibility: ['I', 'II'],
+    },
+    jobcalcActive: true,
+  },
+  {
+    id: 'aropol-7241',
+    name: 'Aropol 7241 (Iso T15 DR)',
+    supplier: 'Ashland',
+    family: 'iso_polyester',
+    max_service_temp_F: 180,
+    density_lb_ft3: 73,
+    price_per_lb: 1.51,
+    // Same chemistry as Q-6376; estimators only use 7241 when tankers
+    // can't deliver the bulk Q-6376. Cost defaults to Q-6376 in JobCalc.
+    compatible_chemical_families: ['dilute_acid', 'caustic', 'potable_water'],
+    certifications: {
+      nsf_ansi_61: { listed: false },
+      nsf_ansi_2: { listed: false },
+      asme_rtp1_class_eligibility: ['I', 'II'],
+    },
+    jobcalcActive: true,
+  },
   {
     id: 'derakane-411-350',
-    name: 'Derakane 411-350',
+    name: 'Derakane Signia 411',
     supplier: 'Ashland',
     family: 'bis_a_epoxy_ve',
     max_service_temp_F: 220,
     density_lb_ft3: 68,
-    price_per_lb: 2.85,
+    price_per_lb: 4.40,
     compatible_chemical_families: ['dilute_acid', 'caustic', 'chlorinated_water', 'potable_water'],
     certifications: {
-      nsf_ansi_61: { listed: true, max_temp_F: 180, listing_ref: 'NSF 61: Ashland Derakane 411-350' },
+      nsf_ansi_61: { listed: true, max_temp_F: 180, listing_ref: 'NSF 61: Ashland Derakane Signia 411' },
       nsf_ansi_2: { listed: false },
       asme_rtp1_class_eligibility: ['I', 'II'],
     },
+    jobcalcActive: true,
   },
   {
     id: 'derakane-441-400',
-    name: 'Derakane 441-400',
+    name: 'Derakane Signia 441',
     supplier: 'Ashland',
     family: 'bis_a_epoxy_ve',
     max_service_temp_F: 240,
     density_lb_ft3: 69,
-    price_per_lb: 3.20,
+    price_per_lb: 5.36,
     compatible_chemical_families: ['concentrated_acid', 'oxidizing_acid', 'chlorinated_water'],
     certifications: {
       nsf_ansi_61: { listed: false },
       nsf_ansi_2: { listed: false },
       asme_rtp1_class_eligibility: ['I', 'II', 'III'],
     },
+    jobcalcActive: true,
   },
   {
     id: 'derakane-470-300',
-    name: 'Derakane 470-300',
+    name: 'Derakane Signia 470',
     supplier: 'Ashland',
     family: 'novolac_epoxy_ve',
     max_service_temp_F: 300,
     density_lb_ft3: 70,
-    price_per_lb: 3.85,
-    compatible_chemical_families: ['solvent', 'hot_acid', 'hypochlorite'],
+    price_per_lb: 6.25,
+    compatible_chemical_families: ['solvent', 'hot_acid', 'hypochlorite', 'oxidizing_acid'],
     certifications: {
       nsf_ansi_61: { listed: false },
       nsf_ansi_2: { listed: false },
       asme_rtp1_class_eligibility: ['I', 'II', 'III'],
     },
+    jobcalcActive: true,
   },
+  {
+    id: 'derakane-510-b-400',
+    name: 'Derakane 510 B-400 (Brominated)',
+    supplier: 'Ashland',
+    family: 'bis_a_epoxy_ve',
+    max_service_temp_F: 230,
+    density_lb_ft3: 72,
+    price_per_lb: 5.15,
+    // Brominated — fire-retardant; doesn't require antimony for flame-
+    // spread compliance. Excellent oxidizing performance for hypochlorite.
+    compatible_chemical_families: ['dilute_acid', 'concentrated_acid', 'chlorinated_water', 'hypochlorite'],
+    certifications: {
+      nsf_ansi_61: { listed: false },
+      nsf_ansi_2: { listed: false },
+      asme_rtp1_class_eligibility: ['I', 'II'],
+    },
+    jobcalcActive: true,
+  },
+  {
+    id: 'hetron-197',
+    name: 'Hetron 197',
+    supplier: 'AOC',
+    family: 'chlorendic_polyester',
+    max_service_temp_F: 250,
+    density_lb_ft3: 73,
+    price_per_lb: 4.81,
+    compatible_chemical_families: ['oxidizing_acid', 'hypochlorite', 'chlorinated_water', 'hot_acid'],
+    certifications: {
+      nsf_ansi_61: { listed: false },
+      nsf_ansi_2: { listed: false },
+      asme_rtp1_class_eligibility: ['I', 'II'],
+    },
+    jobcalcActive: true,
+  },
+  {
+    id: 'derakane-451-400',
+    name: 'Derakane 451-400',
+    supplier: 'Ashland',
+    family: 'bis_a_epoxy_ve',
+    max_service_temp_F: 240,
+    density_lb_ft3: 70,
+    price_per_lb: 5.61,
+    // Replaces the discontinued Hetron 980 — chlorinated/oxidizing service.
+    compatible_chemical_families: ['concentrated_acid', 'oxidizing_acid', 'chlorinated_water', 'hypochlorite'],
+    certifications: {
+      nsf_ansi_61: { listed: false },
+      nsf_ansi_2: { listed: false },
+      asme_rtp1_class_eligibility: ['I', 'II', 'III'],
+    },
+    jobcalcActive: true,
+  },
+  {
+    id: 'hetron-992',
+    name: 'Hetron 992 (FR Vinylester)',
+    supplier: 'AOC',
+    family: 'bis_a_epoxy_ve',
+    max_service_temp_F: 220,
+    density_lb_ft3: 70,
+    price_per_lb: 5.19,
+    // Brominated FR vinylester — Hetron FR 992 in supplier docs.
+    compatible_chemical_families: ['dilute_acid', 'concentrated_acid', 'oxidizing_acid', 'chlorinated_water'],
+    certifications: {
+      nsf_ansi_61: { listed: false },
+      nsf_ansi_2: { listed: false },
+      asme_rtp1_class_eligibility: ['I', 'II'],
+    },
+    jobcalcActive: true,
+  },
+
+  // ─── Legacy / hidden — kept for backwards-compat with persisted ─
+  // revisions saved before the dropdown was filtered. The chemistry-step
+  // dropdown skips anything without `jobcalcActive: true`, but when a
+  // saved revision references one of these IDs it still resolves
+  // correctly throughout the rest of the app.
   {
     id: 'derakane-470-HT-400',
     name: 'Derakane 470-HT-400',
@@ -104,8 +229,6 @@ export const SEED_RESINS: SeedResin[] = [
     max_service_temp_F: 230,
     density_lb_ft3: 72,
     price_per_lb: 3.55,
-    // Brominated — adds fire-retardancy; chemistry similar to 411 with
-    // improved oxidizing performance.
     compatible_chemical_families: ['dilute_acid', 'concentrated_acid', 'chlorinated_water', 'hypochlorite'],
     certifications: {
       nsf_ansi_61: { listed: false },

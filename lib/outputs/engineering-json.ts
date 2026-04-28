@@ -67,10 +67,13 @@ export function buildEngineeringJson(
       concentration_pct: rev.service.concentrationPct ?? null,
       operating_temp_F: rev.service.operatingTempF,
       design_temp_F: rev.service.designTempF,
+      min_ambient_temp_F: rev.service.minAmbientTempF ?? null,
       specific_gravity: rev.service.specificGravity,
       operating_pressure_psig: rev.service.operatingPressurePsig,
       vacuum_psig: rev.service.vacuumPsig,
       post_cure: !!rev.service.postCure,
+      installation_location: rev.service.installationLocation ?? null,
+      tank_color: rev.service.tankColor ?? null,
     },
 
     site: {
@@ -88,6 +91,11 @@ export function buildEngineeringJson(
         ? { required: true, target_end_use_temp_F: rev.certs.nsfAnsi61TargetTempF ?? rev.service.designTempF }
         : { required: false },
       nsf_ansi_2: { required: rev.certs.nsfAnsi2Required },
+      astm_d3299: !!rev.certs.astmD3299,
+      astm_d4097: !!rev.certs.astmD4097,
+      astm_d5685: !!rev.certs.astmD5685,
+      pe_stamp: !!rev.certs.peStamp,
+      icc_es_listed: !!rev.certs.iccEsListed,
       third_party_inspector: rev.certs.thirdPartyInspector,
       required_documents: rev.certs.requiredDocuments,
     },
@@ -99,11 +107,25 @@ export function buildEngineeringJson(
       top_head: rev.geometry.topHead,
       bottom: rev.geometry.bottom,
       freeboard_in: rev.geometry.freeboardIn,
+      quantity: rev.geometry.quantity ?? 1,
+      double_wall: !!rev.geometry.doubleWall,
+      baffles: {
+        count: rev.geometry.baffleCount ?? 0,
+        type: rev.geometry.baffleType ?? null,
+        length_ft: rev.geometry.baffleLengthFt ?? null,
+      },
+      stand: {
+        type: rev.geometry.standType ?? (rev.geometry.stainlessStand
+          ? (rev.geometry.stainlessGrade === 'SS316' || rev.geometry.stainlessGrade === 'SS316L' ? 'ss316' : 'ss304')
+          : 'none'),
+        height_ft: rev.geometry.standHeightFt ?? null,
+      },
     },
 
     wall_buildup: {
       corrosion_barrier: {
         resin: rev.wallBuildup?.resinId ?? null,
+        veil:  rev.wallBuildup?.veilId  ?? null,
       },
       structural: {
         total_thickness_in: null,
@@ -112,10 +134,16 @@ export function buildEngineeringJson(
 
     structural_analysis: rev.outputs?.structuralAnalysis ?? null,
     nozzles: Array.isArray(rev.geometry?.nozzles) ? rev.geometry.nozzles : [],
-    accessories: [],
+    // Full Step-2 accessory bundle — every toggle, count, and option
+    // captured verbatim so engineering can replay the exact configuration.
+    accessories: rev.geometry?.accessories ?? null,
     anchorage: null,
     flags: [],
     pricing: null,
+    /** Free-form notes captured on the Review page. The customer-facing
+     *  Quote PDF intentionally ignores this field; engineering, ops, and
+     *  the JSON download are the only consumers. */
+    engineering_notes: rev.outputs?.engineeringNotes ?? null,
 
     checksum_sha256: null,
   };

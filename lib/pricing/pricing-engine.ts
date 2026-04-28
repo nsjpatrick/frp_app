@@ -1,227 +1,196 @@
-import { SEED_RESINS } from '@/lib/catalog/seed-data';
-
 /**
- * V0 pricing engine.
+ * V1 pricing engine — driven by jobcalc12.2.99.xls.
  *
- * Pure function: takes the configurator state and returns a full pricing
- * breakdown. The goal is twofold — give the rep a number that moves
- * sensibly when they edit quantity / size / certs, and provide a single
- * seam the real pricing engine will plug into later (swap the body,
- * keep the shape).
+ * The previous engine was a calibrated mock. This one is structurally
+ * faithful to the Excel workbook PTI estimators use today:
  *
- * Model (rough, calibrated against a handful of recent PTI quotes):
- *   unit = base + size + resin + accessories + cert + orientation + postCure
- *   extended = unit × quantity
- *   totalDelivered = extended + freight
+ *   inputs → line items → per-line markup → category efficiency
+ *          → burdened labor + material catalog → cost
+ *          → ÷ sales modifier → unit sale price
  *
- * Size scaling is linear on cylindrical capacity (gal), with a floor so
- * small vessels don't drop below tooling+minimum-charge territory.
+ * Public surface kept stable so the wizard's `LiveSummary` keeps working
+ * without a refactor:
+ *
+ *   computePricing(inputs) → { unitPrice, unitLines, quantity,
+ *                              extendedPrice, freight, totalDelivered }
+ *
+ * New optional fields (`breakdown`, `categoryTotals`, `costStructure`)
+ * carry the full Excel-style detail for power users / future drill-down.
  */
 
-export type PricingInputs = {
-  geometry: {
-    orientation?: 'vertical' | 'horizontal' | string | null;
-    idIn?: number | null;
-    ssHeightIn?: number | null;
-    nozzles?: Array<{ quantity?: number | null }>;
-    baffles?: boolean;
-    baffleCount?: number | null;
-    stainlessStand?: boolean;
-    stainlessGrade?: string | null;
-    quantity?: number | null;
-  };
-  service: {
-    postCure?: boolean;
-  };
-  certs: {
-    asmeRtp1Class?: 'I' | 'II' | 'III' | null | string;
-    nsfAnsi61Required?: boolean;
-    nsfAnsi2Required?: boolean;
-    thirdPartyInspector?: 'NONE' | 'TUV' | 'LLOYDS' | 'INTERTEK' | null | string;
-  };
-  wallBuildup: {
-    resinId?: string | null;
-  };
-};
+import {
+  CERT_PREMIUM,
+  DEFAULT_FREIGHT_USD,
+} from './jobcalc-constants';
+import {
+  buildAllLines,
+  type JobCalcInputs,
+} from './jobcalc-line-items';
+import {
+  type JobCalcRollup,
+  type JobCalcLineItem,
+  resolveResinPricePerLb,
+  rollup,
+} from './jobcalc-engine';
+
+/* ── Public types (backwards-compatible with V0 engine) ────────────── */
+
+export type PricingInputs = JobCalcInputs;
 
 export type PricingLine = {
-  /** Machine-readable key so display code can inspect / filter. */
   key: string;
   label: string;
   amount: number;
 };
 
 export type PricingBreakdown = {
-  /** Per-vessel price. */
+  /** Per-vessel sale price (rep-facing). */
   unitPrice: number;
-  /** Per-vessel lines that roll up to `unitPrice`. */
+  /** Rep-friendly bucketed line items that roll up to `unitPrice`. */
   unitLines: PricingLine[];
-  /** Number of vessels on this quote. */
   quantity: number;
-  /** unitPrice × quantity */
+  /** unitPrice × quantity. */
   extendedPrice: number;
-  /** Fixed freight line, F.O.B. Fairfield. */
   freight: number;
-  /** extendedPrice + freight. This is what the rep quotes. */
+  /** extendedPrice + freight — what the rep quotes. */
   totalDelivered: number;
+
+  /** ─── New: full Excel-faithful breakdown for power users ───────── */
+  detail: {
+    /** Burdened labor amount before sales markup ($). */
+    laborAmountUsd: number;
+    /** Material amount before sales markup ($). */
+    materialAmountUsd: number;
+    /** laborAmountUsd + materialAmountUsd — Excel "Grand Tank Total". */
+    grandTankCostUsd: number;
+    /** Margin uplift = unitPrice − grandTankCostUsd. */
+    salesUpliftUsd: number;
+    /** Adjusted hours by labor category, post-efficiency multipliers. */
+    laborHoursAdjusted: JobCalcRollup['adjustedLaborHrs'];
+    /** Total adjusted labor hours (sum of categories). */
+    totalAdjustedLaborHrs: number;
+    /** Resin $/lb actually used in this calc. */
+    resinPricePerLb: number;
+    /** Full itemized list — one row per Excel line item that contributed. */
+    lineItems: Array<{
+      key: string;
+      label: string;
+      group?: JobCalcLineItem['group'];
+      laborHrs: number;
+      laborUsd: number;
+      materialUsd: number;
+      totalUsd: number;
+    }>;
+  };
 };
 
-const BASE_FLOOR         = 24_000;   // Tooling + minimum-charge floor.
-const PRICE_PER_GALLON   = 2.00;     // Size scaling on cylindrical volume.
-const GAL_CYL_CONSTANT   = Math.PI;  // For volume = π·r²·h (in³), ÷ 231 gal.
-
-const NOZZLE_UNIT_COST   = 800;
-const BAFFLE_UNIT_COST   = 2_500;
-const SS_STAND_COST      = 4_500;
-
-const FREIGHT            = 1_600;
-
-const RESIN_WEIGHT_PRICE_LB_SCALE = 220; // Calibrated so Derakane 411 ($2.85/lb) lands near the legacy mock.
-
-const CERT_MULTIPLIER: Record<string, number> = {
-  I:   1.05,
-  II:  1.10,
-  III: 1.20,
-};
-
-function approxGallons(idIn: number | null | undefined, ssHeightIn: number | null | undefined): number {
-  if (!idIn || !ssHeightIn) return 0;
-  const volInCubed = GAL_CYL_CONSTANT * (idIn / 2) ** 2 * ssHeightIn;
-  return volInCubed / 231;
-}
+/* ── Main entry point ──────────────────────────────────────────────── */
 
 export function computePricing(inputs: PricingInputs): PricingBreakdown {
-  const { geometry, service, certs, wallBuildup } = inputs;
+  const quantity = Math.max(1, Math.floor(Number(inputs.geometry?.quantity) || 1));
 
-  const quantity = Math.max(1, Math.floor(Number(geometry.quantity) || 1));
-  const gal = approxGallons(geometry.idIn, geometry.ssHeightIn);
+  // 1. Build the line items the wizard's current state implies.
+  const lines = buildAllLines(inputs);
 
-  // --- Per-vessel breakdown -----------------------------------------------
-  const unitLines: PricingLine[] = [];
+  // 2. Resolve resin price ($/lb) — drives the resin column in the rollup.
+  const resinPricePerLb = resolveResinPricePerLb(inputs.wallBuildup?.resinId);
 
-  // Base + size-driven materials & labor.
-  const baseAndSize = Math.max(BASE_FLOOR, BASE_FLOOR + gal * PRICE_PER_GALLON);
-  unitLines.push({
-    key: 'base_size',
-    label:
-      gal > 0
-        ? `Materials & fabrication (≈ ${Math.round(gal).toLocaleString('en-US')} gal)`
-        : 'Materials & fabrication (minimum)',
-    amount: round2(baseAndSize),
-  });
+  // 3. Excel-style rollup → cost.
+  const r = rollup(lines, resinPricePerLb);
 
-  // Resin premium: compatible with Derakane 411-350 as the baseline — more
-  // expensive resins (novolacs, chlorendics) bump the unit price. Ignores
-  // selection when we can't find the resin — keeps the engine resilient.
-  const resin = wallBuildup.resinId
-    ? SEED_RESINS.find((r) => r.id === wallBuildup.resinId)
-    : null;
-  if (resin) {
-    const baselineResinCost = 2.85 * RESIN_WEIGHT_PRICE_LB_SCALE; // Derakane 411-350 @ $2.85/lb
-    const thisResinCost     = resin.price_per_lb * RESIN_WEIGHT_PRICE_LB_SCALE;
-    const resinPremium      = thisResinCost - baselineResinCost;
-    if (Math.abs(resinPremium) >= 1) {
-      unitLines.push({
-        key: 'resin_premium',
-        label: `Resin premium (${resin.name})`,
-        amount: round2(resinPremium),
-      });
-    }
-  }
+  // 4. Apply certification premiums on top of cost (multiplicative on the
+  //    cost subtotal). RTP-1 + NSF aren't first-class in the Excel rollup
+  //    chain — Excel embeds them in per-line labor — but the wizard treats
+  //    them as switches, so we lift them up to the cost level here.
+  let certifiedCostUsd = r.grandTankCostUsd;
+  const certLines: PricingLine[] = [];
 
-  // Accessories: nozzles, baffles, stand.
-  const nozzleCount = Array.isArray(geometry.nozzles)
-    ? geometry.nozzles.reduce((n, x) => n + (Number(x?.quantity) || 0), 0)
-    : 0;
-  if (nozzleCount > 0) {
-    unitLines.push({
-      key: 'nozzles',
-      label: `Nozzles & connections (${nozzleCount})`,
-      amount: nozzleCount * NOZZLE_UNIT_COST,
-    });
-  }
-  if (geometry.baffles && (geometry.baffleCount ?? 0) > 0) {
-    unitLines.push({
-      key: 'baffles',
-      label: `Baffles (${geometry.baffleCount})`,
-      amount: (geometry.baffleCount ?? 0) * BAFFLE_UNIT_COST,
-    });
-  }
-  if (geometry.stainlessStand) {
-    unitLines.push({
-      key: 'ss_stand',
-      label: `Stainless steel stand${geometry.stainlessGrade ? ` (${geometry.stainlessGrade.replace(/^SS/, '')})` : ''}`,
-      amount: SS_STAND_COST,
-    });
-  }
-
-  // Running subtotal before multiplicative adjustments.
-  let subtotal = unitLines.reduce((sum, l) => sum + l.amount, 0);
-
-  // Certification premium (multiplicative on subtotal).
-  const certClass = certs.asmeRtp1Class ?? null;
-  const certMult = certClass ? (CERT_MULTIPLIER[String(certClass)] ?? 1) : 1;
-  if (certMult > 1) {
-    const certLine = subtotal * (certMult - 1);
-    unitLines.push({
+  const cls = inputs.certs?.asmeRtp1Class as keyof typeof CERT_PREMIUM.asmeRtp1Class | undefined;
+  if (cls && CERT_PREMIUM.asmeRtp1Class[cls]) {
+    const pct = CERT_PREMIUM.asmeRtp1Class[cls];
+    const premium = certifiedCostUsd * pct;
+    certifiedCostUsd += premium;
+    certLines.push({
       key: 'asme_rtp1',
-      label: `ASME RTP-1 Class ${certClass} premium (+${Math.round((certMult - 1) * 100)}%)`,
-      amount: round2(certLine),
+      label: `ASME RTP-1 Class ${cls} QA premium (+${Math.round(pct * 100)}%)`,
+      amount: round2(premium / 0.38), // priced through, like every other line
     });
-    subtotal += certLine;
   }
-
-  // NSF 61 / NSF 2 QA premiums.
-  if (certs.nsfAnsi61Required) {
-    const nsf61 = subtotal * 0.03;
-    unitLines.push({ key: 'nsf61', label: 'NSF/ANSI 61 compliance (+3%)', amount: round2(nsf61) });
-    subtotal += nsf61;
-  }
-  if (certs.nsfAnsi2Required) {
-    const nsf2 = subtotal * 0.02;
-    unitLines.push({ key: 'nsf2', label: 'NSF/ANSI 2 compliance (+2%)', amount: round2(nsf2) });
-    subtotal += nsf2;
-  }
-
-  // Horizontal orientation: adds saddles / support hardware complexity.
-  if (geometry.orientation === 'horizontal') {
-    const horiz = subtotal * 0.08;
-    unitLines.push({ key: 'horizontal', label: 'Horizontal saddles & support (+8%)', amount: round2(horiz) });
-    subtotal += horiz;
-  }
-
-  // Post-cure process.
-  if (service.postCure) {
-    const pc = subtotal * 0.05;
-    unitLines.push({ key: 'post_cure', label: 'Post-cure process (+5%)', amount: round2(pc) });
-    subtotal += pc;
-  }
-
-  // Third-party inspector bump — flat fee, doesn't compound.
-  if (certs.thirdPartyInspector && certs.thirdPartyInspector !== 'NONE') {
-    const fee = 3_500;
-    unitLines.push({
-      key: 'inspector',
-      label: `Third-party inspector (${certs.thirdPartyInspector})`,
-      amount: fee,
+  if (inputs.certs?.nsfAnsi61Required) {
+    const premium = certifiedCostUsd * CERT_PREMIUM.nsfAnsi61;
+    certifiedCostUsd += premium;
+    certLines.push({
+      key: 'nsf61',
+      label: `NSF/ANSI 61 compliance (+${Math.round(CERT_PREMIUM.nsfAnsi61 * 100)}%)`,
+      amount: round2(premium / 0.38),
     });
-    subtotal += fee;
+  }
+  if (inputs.certs?.nsfAnsi2Required) {
+    const premium = certifiedCostUsd * CERT_PREMIUM.nsfAnsi2;
+    certifiedCostUsd += premium;
+    certLines.push({
+      key: 'nsf2',
+      label: `NSF/ANSI 2 compliance (+${Math.round(CERT_PREMIUM.nsfAnsi2 * 100)}%)`,
+      amount: round2(premium / 0.38),
+    });
   }
 
-  const unitPrice = round2(subtotal);
+  // 5. Sale price = certifiedCost ÷ 0.38 (Master Cost2!L32).
+  const unitPriceRaw = certifiedCostUsd / 0.38;
+  const unitPrice = round2(unitPriceRaw);
 
-  // --- Extended ----------------------------------------------------------
-  const extendedPrice  = round2(unitPrice * quantity);
-  const totalDelivered = round2(extendedPrice + FREIGHT);
+  // 6. Rep-facing buckets — group line items into the same categories the
+  //    sales rep cares about (shell fab, fittings, structure, etc.).
+  const grouped = groupLines(r);
+  const unitLines: PricingLine[] = [];
+  if (grouped.shell      > 0) unitLines.push({ key: 'shell',      label: 'Shell fabrication & layup', amount: round2(grouped.shell      / 0.38) });
+  if (grouped.fittings   > 0) unitLines.push({ key: 'fittings',   label: 'Nozzles, manway & fittings',amount: round2(grouped.fittings   / 0.38) });
+  if (grouped.structure  > 0) unitLines.push({ key: 'structure',  label: 'Stand / saddles / lugs',    amount: round2(grouped.structure  / 0.38) });
+  if (grouped.finishing  > 0) unitLines.push({ key: 'finishing',  label: 'Finishing & seam work',     amount: round2(grouped.finishing  / 0.38) });
+  if (grouped.tests      > 0) unitLines.push({ key: 'tests',      label: 'Hydrotest, post-cure, QA',  amount: round2(grouped.tests      / 0.38) });
+  if (grouped.options    > 0) unitLines.push({ key: 'options',    label: 'Options & extras',          amount: round2(grouped.options    / 0.38) });
+  for (const cl of certLines) unitLines.push(cl);
+
+  const extendedPrice = round2(unitPrice * quantity);
+  const totalDelivered = round2(extendedPrice + DEFAULT_FREIGHT_USD);
 
   return {
     unitPrice,
     unitLines,
     quantity,
     extendedPrice,
-    freight: FREIGHT,
+    freight: DEFAULT_FREIGHT_USD,
     totalDelivered,
+    detail: {
+      laborAmountUsd:        round2(r.laborAmountUsd),
+      materialAmountUsd:     round2(r.materialAmountUsd),
+      grandTankCostUsd:      round2(certifiedCostUsd),
+      salesUpliftUsd:        round2(unitPrice - certifiedCostUsd),
+      laborHoursAdjusted:    r.adjustedLaborHrs,
+      totalAdjustedLaborHrs: round2(r.totalAdjustedLaborHrs),
+      resinPricePerLb,
+      lineItems: r.lineCosts.map(({ line, cost }) => ({
+        key: line.key,
+        label: line.label,
+        group: line.group,
+        laborHrs:    round2(cost.laborHrs),
+        laborUsd:    round2(cost.laborUsd),
+        materialUsd: round2(cost.materialUsd),
+        totalUsd:    round2(cost.totalUsd),
+      })),
+    },
   };
+}
+
+/* ── Helpers ───────────────────────────────────────────────────────── */
+
+function groupLines(r: JobCalcRollup) {
+  const out = { shell: 0, fittings: 0, structure: 0, finishing: 0, tests: 0, options: 0 };
+  for (const { line, cost } of r.lineCosts) {
+    const g = line.group ?? 'options';
+    out[g as keyof typeof out] += cost.totalUsd;
+  }
+  return out;
 }
 
 function round2(n: number): number {
