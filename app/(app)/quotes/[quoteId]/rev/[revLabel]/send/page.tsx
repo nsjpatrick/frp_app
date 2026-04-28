@@ -70,6 +70,9 @@ export default async function SendStep({ params }: { params: Promise<{ quoteId: 
           region:       customer.region       ?? '',
           postalCode:   customer.postalCode   ?? '',
           country:      customer.country      ?? '',
+          salesEngineerId: typeof (rev.outputs as any)?.salesEngineerId === 'string'
+            ? (rev.outputs as any).salesEngineerId
+            : '',
         }}
       />
     </WizardShell>

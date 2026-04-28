@@ -51,8 +51,13 @@ export type TankTypeDefaults = {
   };
   geometry: {
     orientation: 'vertical' | 'horizontal';
-    idIn: number;
-    ssHeightIn: number;
+    /** Default diameter in inches. `null` = leave empty so the rep
+     *  must enter a size — used for the "FRP Vessel" generic default
+     *  (new quotes start empty; size + price stay zeroed until the
+     *  rep types in real numbers). */
+    idIn: number | null;
+    /** Same null-as-empty contract as `idIn`. */
+    ssHeightIn: number | null;
     topHead: 'flat' | 'F_AND_D' | 'conical' | 'open_top_cover';
     bottom: 'flat_ring_supported' | 'dished' | 'conical_drain' | 'sloped';
     freeboardIn: number;
@@ -95,8 +100,12 @@ const baseFRPVessel: TankTypeDefaults = {
   wallBuildup: { resinId: 'derakane-411-350', veilId: 'c_glass_1' },
   geometry: {
     orientation: 'vertical',
-    idIn: 96,
-    ssHeightIn: 144,
+    // FRP Vessel is the generic default — the rep must enter actual
+    // dimensions before pricing engages. We deliberately leave size
+    // empty so a fresh quote shows blank diameter / SS-height fields
+    // and the LiveSummary holds at $0 until real numbers arrive.
+    idIn: null,
+    ssHeightIn: null,
     topHead: 'F_AND_D',
     bottom: 'flat_ring_supported',
     freeboardIn: 12,

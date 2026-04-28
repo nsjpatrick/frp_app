@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CheckCircle2, Download } from 'lucide-react';
 import { saveRecipientForQuote } from '@/lib/actions/send';
 import { formatPhone } from '@/lib/phone';
+import { SALES_ENGINEERS } from '@/lib/catalog/sales-engineers';
 
 /**
  * RecipientForm — final step of the configurator. Editable recipient and
@@ -55,6 +56,10 @@ export function RecipientForm({
     region: string;
     postalCode: string;
     country: string;
+    /** SalesEngineer id from `lib/catalog/sales-engineers.ts`. Optional —
+     *  fresh quotes default to "no selection" and the rep must pick one
+     *  to surface contact info on the PDF and email draft. */
+    salesEngineerId: string;
   };
   quoteNumber: string;
   quoteId: string;
@@ -87,6 +92,7 @@ export function RecipientForm({
   const [newProjectName,        setNewProjectName]        = useState('');
   const [newProjectSite,        setNewProjectSite]        = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
+  const [salesEngineerId,       setSalesEngineerId]       = useState(initial.salesEngineerId);
 
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -391,6 +397,34 @@ export function RecipientForm({
             later from the quote detail page.
           </p>
         )}
+      </section>
+
+      {/* ── Sales Engineer ───────────────────────────────────────────────
+           Selection populates the customer-facing PDF "Sales Engineer"
+           block and any future mailto draft. No default — the rep must
+           pick the engineer who will own this quote going forward. */}
+      <section>
+        <h3 className="section-head">Sales Engineer</h3>
+        <p className="text-[13px] text-slate-500 -mt-2 mb-3">
+          Pick the PTI engineer the customer should contact about this
+          quote. The selection drives the PDF&rsquo;s &ldquo;Sales Engineer&rdquo;
+          block and the email draft sender details.
+        </p>
+        <div className="max-w-sm">
+          <label htmlFor="salesEngineerId" className="glass-label">Engineer</label>
+          <select
+            id="salesEngineerId"
+            name="salesEngineerId"
+            value={salesEngineerId}
+            onChange={(e) => setSalesEngineerId(e.target.value)}
+            className="glass-input"
+          >
+            <option value="">Select an engineer…</option>
+            {SALES_ENGINEERS.map((e) => (
+              <option key={e.id} value={e.id}>{e.name}</option>
+            ))}
+          </select>
+        </div>
       </section>
 
       {error && (

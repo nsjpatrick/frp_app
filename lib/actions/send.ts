@@ -130,11 +130,19 @@ export async function saveRecipientForQuote(formData: FormData): Promise<void> {
     });
   }
 
+  // ── Sales Engineer assignment ─────────────────────────────────────────
+  // Persisted on the latest Revision's `outputs` JSON so the PDF, email
+  // draft, and engineering JSON all read the same id. Empty / unrecognized
+  // values clear the assignment.
+  const VALID_SE_IDS = new Set(['devin-schuler', 'sam-patrick', 'nate-patrick']);
+  const salesEngineerIdRaw = String(formData.get('salesEngineerId') ?? '').trim();
+  const salesEngineerId = VALID_SE_IDS.has(salesEngineerIdRaw) ? salesEngineerIdRaw : null;
+
   // Recompute + persist the quote's total price. Sending is the canonical
   // moment the rep commits to a number, so we snapshot it on the Quote
   // row — dashboards, the quotes list, and the detail page all read it.
   // Uses the latest revision so the stored value matches what the PDF
-  // just rendered.
+  // just rendered. Same write also lands the salesEngineerId.
   const latestRev = await db.revision.findFirst({
     where: { quoteId },
     orderBy: { createdAt: 'desc' },
@@ -146,9 +154,18 @@ export async function saveRecipientForQuote(formData: FormData): Promise<void> {
       certs: (latestRev.certs ?? {}) as any,
       wallBuildup: (latestRev.wallBuildup ?? {}) as any,
     });
+    const existingOutputs: any = latestRev.outputs ?? {};
+    const nextOutputs = { ...existingOutputs };
+    if (salesEngineerId) nextOutputs.salesEngineerId = salesEngineerId;
+    else delete nextOutputs.salesEngineerId;
+
     await db.quote.update({
       where: { id: quoteId },
       data: { totalPrice: pricing.totalDelivered },
+    });
+    await db.revision.update({
+      where: { id: latestRev.id },
+      data: { outputs: nextOutputs },
     });
   }
 

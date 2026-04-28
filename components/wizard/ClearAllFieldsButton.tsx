@@ -105,8 +105,11 @@ export function ClearAllFieldsButton({
 
     // ─── Geometry (form is in feet) ──────────────────────────────
     setNamed('orientation',  d.geometry.orientation);
-    setNamed('idFt',         d.geometry.idIn        / 12);
-    setNamed('ssHeightFt',   d.geometry.ssHeightIn  / 12);
+    // Diameter + SS-height clear to empty strings on reset — FRP Vessel
+    // defaults are null (the rep must enter real numbers), and the
+    // pricing engine returns $0 until both are filled in.
+    setNamed('idFt',         d.geometry.idIn       != null ? d.geometry.idIn       / 12 : '');
+    setNamed('ssHeightFt',   d.geometry.ssHeightIn != null ? d.geometry.ssHeightIn / 12 : '');
     setNamed('freeboardFt',  d.geometry.freeboardIn / 12);  // 1 ft default
     setNamed('quantity',     1);                            // always 1 on clear
 
@@ -139,6 +142,9 @@ export function ClearAllFieldsButton({
     );
 
     // ─── Live-pricing rail ──────────────────────────────────────
+    // Broadcast nullable size as `null` so the LiveSummary clears any
+    // residual idIn/ssHeightIn from before the reset. The pricing
+    // engine's missing-dimensions guard then drops the unit price to $0.
     window.dispatchEvent(
       new CustomEvent('live-pricing:patch', {
         detail: {
