@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Send, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Download } from 'lucide-react';
 import { saveRecipientForQuote } from '@/lib/actions/send';
 import { formatPhone } from '@/lib/phone';
 
@@ -9,17 +9,15 @@ import { formatPhone } from '@/lib/phone';
  * RecipientForm — final step of the configurator. Editable recipient and
  * project info, pre-populated from the current Customer + Project records.
  *
- * On "Send Quote" the form:
- *   1. Calls the server action to persist any edits to Customer / Project.
- *   2. Opens the mail client with a pre-filled draft.
+ * On "Complete and Save" the form:
+ *   1. Calls the server action to persist any edits to Customer / Project
+ *      and snapshot the quote's totalPrice.
+ *   2. Triggers the customer-facing Quote PDF download (browser save-as).
+ *   3. Returns the rep to the /quotes queue.
  *
- * The PDF is NOT attached — `mailto:` per RFC 6068 can't carry
- * attachments, and the download-then-attach-reminder workaround we used
- * to run was more noise than help. Reps download the PDF separately from
- * the quote detail page (or from the Review step's preview link) and
- * attach it to the draft themselves if they want to ship the formal
- * document. The mailto body is a plain-text summary that stands on its
- * own for quick sends.
+ * No mailto draft is opened — outbound communication is the rep's job
+ * to handle out-of-band; the download keeps the formal PDF in their
+ * hands so they can attach it to whichever channel they prefer.
  */
 
 export type ProjectOption = {
@@ -37,7 +35,6 @@ export function RecipientForm({
   quoteNumber,
   quoteId,
   revLabel,
-  mailtoBody,
 }: {
   customerId: string;
   customerName: string;
@@ -62,7 +59,6 @@ export function RecipientForm({
   quoteNumber: string;
   quoteId: string;
   revLabel: string;
-  mailtoBody: string;
 }) {
   const [contactName,  setContactName]  = useState(initial.contactName);
   const [contactEmail, setContactEmail] = useState(initial.contactEmail);
@@ -96,15 +92,22 @@ export function RecipientForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  const openMailto = () => {
-    const subject = `Quote ${quoteNumber} – ${customerName}`;
-    const body = mailtoBody
-      .replace(/^Hi [^,]+,/m, `Hi ${contactName || customerName},`)
-      .replace(/^Site: .*$/m, siteAddress ? `Site: ${siteAddress}` : '')
-      .replace(/Thank you for the opportunity to quote the [^]+? project/m,
-               `Thank you for the opportunity to quote the ${projectName || '(your)'} project`);
-    const url = `mailto:${encodeURIComponent(contactEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.location.href = url;
+  /**
+   * Trigger the customer-facing Quote PDF as a browser download. We use a
+   * synthetic anchor click rather than `window.open` so the file streams
+   * straight to the user's downloads folder (no popup-blocker dance, no
+   * extra tab to clean up). Browsers preserve in-flight downloads across
+   * navigation, so we can safely redirect to /quotes immediately after.
+   */
+  const downloadPdf = () => {
+    const url = `/quotes/${quoteId}/rev/${revLabel}/quote.pdf`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `PTI-${quoteNumber}-Rev${revLabel}.pdf`;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -116,10 +119,14 @@ export function RecipientForm({
     try {
       await saveRecipientForQuote(formData);
       setSaved(true);
-      openMailto();
+      downloadPdf();
+      // Small breath so the browser commits the download request before we
+      // tear down the page; otherwise some browsers cancel the request when
+      // the parent navigates synchronously.
+      await new Promise((r) => setTimeout(r, 200));
+      window.location.assign('/quotes');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save.');
-    } finally {
       setPending(false);
     }
   };
@@ -395,10 +402,7 @@ export function RecipientForm({
         <div className="flex items-start gap-2 text-[13px] text-emerald-700">
           <CheckCircle2 className="w-4 h-4 mt-0.5 flex-none" aria-hidden />
           <div>
-            <div>Saved — mail draft opening in your default client.</div>
-            <div className="text-emerald-800/80 text-[12.5px] mt-0.5">
-              Need the formal PDF? Grab it from the quote detail page and attach it to the draft before sending.
-            </div>
+            <div>Saved — downloading PDF and returning to the quotes queue.</div>
           </div>
         </div>
       )}
@@ -408,12 +412,12 @@ export function RecipientForm({
           {pending ? (
             <>
               <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-white/60 border-t-transparent animate-spin" />
-              Sending…
+              Saving…
             </>
           ) : (
             <>
-              <Send className="w-4 h-4" strokeWidth={2.5} aria-hidden />
-              Send Quote
+              <Download className="w-4 h-4" strokeWidth={2.5} aria-hidden />
+              Complete and Save
             </>
           )}
         </button>

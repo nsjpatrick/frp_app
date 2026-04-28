@@ -117,7 +117,7 @@ export function AccessoriesSection({ initial }: { initial: Accessories }) {
       <div className="space-y-3">
         {/* ─── Top access ─────────────────────────────────────────── */}
         <Group title="Top Access" hint="Manway type + size, optional split/hinged top cover.">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="glass-label">Manway type</label>
               <select
@@ -143,16 +143,6 @@ export function AccessoriesSection({ initial }: { initial: Accessories }) {
                   <option key={d} value={d}>{d}″</option>
                 ))}
               </select>
-            </div>
-            <div className="flex items-end">
-              <label className="toggle-pill whitespace-nowrap">
-                <input
-                  type="checkbox"
-                  checked={a.manway.rtp1Style}
-                  onChange={(e) => patch('manway', { rtp1Style: e.target.checked })}
-                />
-                <span>RTP-1 style</span>
-              </label>
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -354,7 +344,21 @@ export function AccessoriesSection({ initial }: { initial: Accessories }) {
             <div className="rounded-lg bg-slate-50/40 p-3 border border-slate-200/60 space-y-2">
               <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Ladder</div>
               <div className="grid grid-cols-2 gap-2">
-                <select value={a.ladder.type} onChange={(e) => patch('ladder', { type: e.target.value as (typeof LADDER_TYPES)[number] })} className="glass-input">
+                <select
+                  value={a.ladder.type}
+                  onChange={(e) => {
+                    const next = e.target.value as (typeof LADDER_TYPES)[number];
+                    // Switching to "None" clears every dependent toggle so
+                    // the saved revision can't carry stale `cage:true` /
+                    // `walkthru:true` flags from a prior selection.
+                    if (next === 'none') {
+                      patch('ladder', { type: next, cage: false, walkthru: false, roofturn: false });
+                    } else {
+                      patch('ladder', { type: next });
+                    }
+                  }}
+                  className="glass-input"
+                >
                   {LADDER_TYPES.map((t) => <option key={t} value={t}>{LADDER_LABEL[t]}</option>)}
                 </select>
                 <select value={a.ladder.location} onChange={(e) => patch('ladder', { location: e.target.value as (typeof LADDER_LOCATIONS)[number] })} className="glass-input" disabled={a.ladder.type === 'none'}>
@@ -371,7 +375,19 @@ export function AccessoriesSection({ initial }: { initial: Accessories }) {
             <div className="rounded-lg bg-slate-50/40 p-3 border border-slate-200/60 space-y-2">
               <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">Handrail</div>
               <div className="grid grid-cols-2 gap-2">
-                <select value={a.handrail.type} onChange={(e) => patch('handrail', { type: e.target.value as (typeof HANDRAIL_TYPES)[number] })} className="glass-input">
+                <select
+                  value={a.handrail.type}
+                  onChange={(e) => {
+                    const next = e.target.value as (typeof HANDRAIL_TYPES)[number];
+                    // None clears the self-close-gate flag too.
+                    if (next === 'none') {
+                      patch('handrail', { type: next, selfCloseGate: false });
+                    } else {
+                      patch('handrail', { type: next });
+                    }
+                  }}
+                  className="glass-input"
+                >
                   {HANDRAIL_TYPES.map((t) => <option key={t} value={t}>{HANDRAIL_LABEL[t]}</option>)}
                 </select>
                 <select value={a.handrail.location} onChange={(e) => patch('handrail', { location: e.target.value as (typeof LADDER_LOCATIONS)[number] })} className="glass-input" disabled={a.handrail.type === 'none'}>
@@ -402,17 +418,25 @@ export function AccessoriesSection({ initial }: { initial: Accessories }) {
 
         {/* ─── Insulation & heat trace ────────────────────────────── */}
         <Group title="Insulation & Heat Trace" hint="Foam insulation layers + Plastatherm electrical heat tracing.">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Insulation dropdown sits at the top; the Heater Configurator
+              block (formerly "Plastatherm heat trace") drops below it so
+              the rep reads top-down: choose insulation, then size the
+              heater package against it. All fields bottom-justify so
+              labels align even when adjacent helper rows differ. */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div>
               <label className="glass-label">Insulation</label>
               <select value={a.insulation} onChange={(e) => patch('insulation', e.target.value as (typeof INSULATION)[number])} className="glass-input">
                 {INSULATION.map((k) => <option key={k} value={k}>{INSULATION_LABEL[k]}</option>)}
               </select>
             </div>
-            <div className="rounded-lg bg-slate-50/40 p-3 border border-slate-200/60">
-              <label className="toggle-pill mb-2"><input type="checkbox" checked={a.plastatherm.enabled} onChange={(e) => patch('plastatherm', { enabled: e.target.checked })} /><span>Plastatherm heat trace</span></label>
-              {a.plastatherm.enabled && (
-                <div className="grid grid-cols-3 gap-2">
+          </div>
+
+          <div className="rounded-lg bg-slate-50/40 p-3 border border-slate-200/60 space-y-3 mt-4">
+            <label className="toggle-pill"><input type="checkbox" checked={a.plastatherm.enabled} onChange={(e) => patch('plastatherm', { enabled: e.target.checked })} /><span>Heater Configurator</span></label>
+            {a.plastatherm.enabled && (
+              <>
+                <div className="grid grid-cols-3 gap-2 items-end">
                   <div>
                     <label className="glass-label">Voltage</label>
                     <select value={a.plastatherm.operatingVoltage} onChange={(e) => patch('plastatherm', { operatingVoltage: e.target.value as '120' | '240' | '480' })} className="glass-input">
@@ -430,8 +454,94 @@ export function AccessoriesSection({ initial }: { initial: Accessories }) {
                     <input type="number" min={-50} max={120} value={a.plastatherm.minTempF} onChange={(e) => patch('plastatherm', { minTempF: Number(e.target.value) || 20 })} className="glass-input" />
                   </div>
                 </div>
-              )}
-            </div>
+                {/* HTD insulation + support inputs — these flow into
+                    `lib/pricing/htd-engine.ts` to size the heater
+                    package (panels / controllers / tape) and price
+                    it through the line-item engine. */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 items-end">
+                  <div>
+                    <label className="glass-label">Insulation type</label>
+                    <select
+                      value={a.plastatherm.insulationType}
+                      onChange={(e) => patch('plastatherm', { insulationType: e.target.value as Accessories['plastatherm']['insulationType'] })}
+                      className="glass-input"
+                    >
+                      <option value="fiberglass">Fiberglass</option>
+                      <option value="polyurethane">Polyurethane</option>
+                      <option value="polyisocyanurate">Polyisocyanurate</option>
+                      <option value="polystyrene">Polystyrene</option>
+                      <option value="cellular_glass">Cellular glass</option>
+                      <option value="calcium_silicate">Calcium silicate</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="glass-label">Thickness (in)</label>
+                    <select
+                      value={String(a.plastatherm.insulationThicknessIn)}
+                      onChange={(e) => patch('plastatherm', { insulationThicknessIn: Number(e.target.value) as Accessories['plastatherm']['insulationThicknessIn'] })}
+                      className="glass-input"
+                    >
+                      {[1, 1.5, 2, 3, 4].map((t) => <option key={t} value={t}>{t}″</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="glass-label">Wind speed (mph)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={200}
+                      value={a.plastatherm.windSpeedMph}
+                      onChange={(e) => patch('plastatherm', { windSpeedMph: Number(e.target.value) || 0 })}
+                      className="glass-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="glass-label">Safety factor</label>
+                    <input
+                      type="number"
+                      step={0.05}
+                      min={0}
+                      max={1}
+                      value={a.plastatherm.safetyFactor}
+                      onChange={(e) => patch('plastatherm', { safetyFactor: Number(e.target.value) || 0 })}
+                      className="glass-input"
+                    />
+                  </div>
+                  <div>
+                    <label className="glass-label">Support style</label>
+                    <select
+                      value={a.plastatherm.supportStyle}
+                      onChange={(e) => patch('plastatherm', { supportStyle: e.target.value as Accessories['plastatherm']['supportStyle'] })}
+                      className="glass-input"
+                    >
+                      <option value="concrete_pad">Concrete pad</option>
+                      <option value="saddles">Saddles</option>
+                      <option value="legs">Legs</option>
+                      <option value="skirt">Skirt</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="glass-label">No. of supports</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={20}
+                      value={a.plastatherm.numSupports}
+                      onChange={(e) => patch('plastatherm', { numSupports: Number(e.target.value) || 0 })}
+                      className="glass-input"
+                    />
+                  </div>
+                </div>
+                <label className="toggle-pill">
+                  <input
+                    type="checkbox"
+                    checked={a.plastatherm.manwayInsulated}
+                    onChange={(e) => patch('plastatherm', { manwayInsulated: e.target.checked })}
+                  />
+                  <span>Manways insulated</span>
+                </label>
+              </>
+            )}
           </div>
         </Group>
 

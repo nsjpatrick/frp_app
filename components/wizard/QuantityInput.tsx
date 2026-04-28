@@ -13,8 +13,15 @@ import { useState } from 'react';
  * (plain `<input defaultValue>` from a server component loses sync when
  * the revision JSON changes underneath it).
  */
-export function QuantityInput({ defaultValue }: { defaultValue: number }) {
-  const [value, setValue] = useState<string>(String(defaultValue));
+export function QuantityInput({ defaultValue }: { defaultValue: number | null | undefined }) {
+  // Empty initial render lets Step 1 show a blank quantity until the rep
+  // types one or picks a tank type that auto-fills. Persisted revisions
+  // come back through `defaultValue` so an existing quote keeps its qty.
+  const [value, setValue] = useState<string>(
+    defaultValue == null || !Number.isFinite(defaultValue)
+      ? ''
+      : String(defaultValue),
+  );
 
   return (
     <input

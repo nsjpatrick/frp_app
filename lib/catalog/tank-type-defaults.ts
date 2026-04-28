@@ -28,10 +28,15 @@ export type TankTypeDefaults = {
     concentrationPct?: number;
     operatingTempF: number;
     designTempF: number;
+    /** Min ambient temperature (°F) at the install site — drives the
+     *  HTD heat-loss ΔT. Defaults to 0 °F (workbook worst-case). */
+    minAmbientTempF: number;
     specificGravity: number;
     operatingPressurePsig: number;
     vacuumPsig: number;
     postCure: boolean;
+    installationLocation: 'indoor' | 'outdoor';
+    tankColor: 'wax' | 'white' | 'grey' | 'other';
   };
   certs: {
     asmeRtp1Class: 'I' | 'II' | 'III' | null;
@@ -41,6 +46,8 @@ export type TankTypeDefaults = {
   };
   wallBuildup: {
     resinId: string;
+    /** Surface veil id from `VEIL_OPTIONS`. Defaults to "1 Ply C Glass". */
+    veilId: string;
   };
   geometry: {
     orientation: 'vertical' | 'horizontal';
@@ -53,6 +60,9 @@ export type TankTypeDefaults = {
     baffleCount: number;
     baffleType: 'plate' | 'wedge';
     stainlessStand: boolean;
+    /** Single (false) vs double-walled (true) sidewall. Bumps the
+     *  pricing engine into Excel's "Double Wall" line items. */
+    doubleWall: boolean;
     nozzles: Array<{ type: string; sizeNps: string; rating: '150#' | '300#'; quantity: number }>;
   };
   accessories: Accessories;
@@ -68,10 +78,13 @@ const baseFRPVessel: TankTypeDefaults = {
     chemicalFamily: 'dilute_acid',
     operatingTempF: 80,
     designTempF: 120,
+    minAmbientTempF: 0,
     specificGravity: 1.0,
     operatingPressurePsig: 0,
     vacuumPsig: 0,
     postCure: false,
+    installationLocation: 'outdoor',
+    tankColor: 'wax',
   },
   certs: {
     asmeRtp1Class: null,
@@ -79,7 +92,7 @@ const baseFRPVessel: TankTypeDefaults = {
     nsfAnsi2Required: false,
     thirdPartyInspector: 'NONE',
   },
-  wallBuildup: { resinId: 'derakane-signia-411' },
+  wallBuildup: { resinId: 'derakane-411-350', veilId: 'c_glass_1' },
   geometry: {
     orientation: 'vertical',
     idIn: 96,
@@ -91,6 +104,7 @@ const baseFRPVessel: TankTypeDefaults = {
     baffleCount: 0,
     baffleType: 'plate',
     stainlessStand: false,
+    doubleWall: false,
     nozzles: [],
   },
   accessories: EMPTY_ACCESSORIES,
@@ -110,10 +124,13 @@ const bryneerDefaults: TankTypeDefaults = {
     concentrationPct: 26, // saturated NaCl ≈ 26 wt%
     operatingTempF: 60,
     designTempF: 100,
+    minAmbientTempF: 0,
     specificGravity: 1.20,
     operatingPressurePsig: 0,
     vacuumPsig: 0,
     postCure: false,
+    installationLocation: 'outdoor',
+    tankColor: 'white', // Bryneers ship with white gelcoat for UV
   },
   certs: {
     asmeRtp1Class: null,
@@ -121,7 +138,7 @@ const bryneerDefaults: TankTypeDefaults = {
     nsfAnsi2Required: false,
     thirdPartyInspector: 'NONE',
   },
-  wallBuildup: { resinId: 'hetron-922' }, // NSF 61 listed VE
+  wallBuildup: { resinId: 'derakane-411-350', veilId: 'c_glass_1' }, // Signia 411 — NSF 61 listed VE, jobcalc active
   geometry: {
     orientation: 'vertical',
     idIn: 120,        // 10 ft — typical Bryneer footprint
@@ -133,6 +150,7 @@ const bryneerDefaults: TankTypeDefaults = {
     baffleCount: 0,
     baffleType: 'plate',
     stainlessStand: false,
+    doubleWall: false,
     nozzles: [
       { type: 'inlet',  sizeNps: '1.5"', rating: '150#', quantity: 1 }, // water inlet ring
       { type: 'outlet', sizeNps: '4"',   rating: '150#', quantity: 1 }, // brine outlet (4" 304 SS fill pipe via salt pipe)
@@ -165,10 +183,9 @@ const bryneerDefaults: TankTypeDefaults = {
     // Most Bryneer installs are seismic-anchored; default to a 4×6,000 lb
     // 304 SS lug set so the pricing reflects realistic anchorage cost.
     tieDownLugs: { enabled: true, ratingLb: 6_000, grade: 'ss304', quantity: 4, encapsulated: false },
-    // Salt-loading via pneumatic truck means the tank gets struck while
-    // partially filled — a heavy-duty rest platform halfway up the ladder
-    // is standard PTI practice.
-    restPlatform: true,
+    // Rest platform stays off by default — even on Bryneers, reps spec
+    // it per-job rather than as a built-in.
+    restPlatform: false,
   },
 };
 
@@ -183,14 +200,17 @@ const rtp1Defaults: TankTypeDefaults = {
   },
 };
 
-/* ── Mixing tank — turns on baffles + agitator support + mixer pad ── */
-const mixingTankDefaults: TankTypeDefaults = {
+/* ── Process Vessel — turns on baffles + agitator support + mixer pad
+ * (collapsed from the legacy `mixing_tank` + `process_vessel` pair into
+ * one entry per the trimmed jobcalc-derived taxonomy). ── */
+const processVesselDefaults: TankTypeDefaults = {
   ...baseFRPVessel,
   geometry: {
     ...baseFRPVessel.geometry,
     baffles: true,
     baffleCount: 4,
     baffleType: 'plate',
+    doubleWall: false,
   },
   accessories: {
     ...EMPTY_ACCESSORIES,
@@ -210,11 +230,14 @@ const scrubberDefaults: TankTypeDefaults = {
     chemicalFamily: 'oxidizing_acid',
     operatingTempF: 100,
     designTempF: 180,
+    installationLocation: 'outdoor',
+    tankColor: 'grey',
   },
-  wallBuildup: { resinId: 'derakane-signia-470' }, // novolac VE for hot acid
+  wallBuildup: { resinId: 'derakane-470-300', veilId: 'carbon_1' }, // novolac VE for hot acid + carbon for oxidizing service
   geometry: {
     ...baseFRPVessel.geometry,
     topHead: 'open_top_cover',
+    doubleWall: false,
   },
   accessories: {
     ...EMPTY_ACCESSORIES,
@@ -223,141 +246,31 @@ const scrubberDefaults: TankTypeDefaults = {
   },
 };
 
-/* ── Caustic — Hetron 922 + 24" side flanged manway ── */
-const causticDefaults: TankTypeDefaults = {
-  ...baseFRPVessel,
-  service: {
-    ...baseFRPVessel.service,
-    chemical: 'Sodium Hydroxide (NaOH)',
-    chemicalFamily: 'caustic',
-    concentrationPct: 50,
-    specificGravity: 1.52,
-  },
-  wallBuildup: { resinId: 'hetron-922' },
-  accessories: {
-    ...EMPTY_ACCESSORIES,
-    manway: { type: 'top_hinged', diameterIn: 24, rtp1Style: false },
-  },
-};
-
-/* ── Bleach (sodium hypochlorite) — 510 B-400 fire-retardant VE ─── */
-const bleachDefaults: TankTypeDefaults = {
-  ...baseFRPVessel,
-  service: {
-    ...baseFRPVessel.service,
-    chemical: 'Sodium Hypochlorite (Bleach)',
-    chemicalFamily: 'hypochlorite',
-    concentrationPct: 12.5,
-    specificGravity: 1.20,
-  },
-  wallBuildup: { resinId: 'derakane-510-b-400' },
-  accessories: {
-    ...EMPTY_ACCESSORIES,
-    vents: [{ kind: 'v', sizeIn: 4, quantity: 1 }],
-  },
-};
-
-/* ── Acid (general) — Derakane Signia 411 baseline ─── */
-const acidDefaults: TankTypeDefaults = {
-  ...baseFRPVessel,
-  service: {
-    ...baseFRPVessel.service,
-    chemical: 'Sulfuric Acid',
-    chemicalFamily: 'concentrated_acid',
-    concentrationPct: 50,
-    specificGravity: 1.40,
-  },
-  wallBuildup: { resinId: 'derakane-signia-441' },
-};
-
-/* ── Potable / DI water — Derakane 411 with NSF 61 ─── */
-const waterDefaults: TankTypeDefaults = {
-  ...baseFRPVessel,
-  service: {
-    ...baseFRPVessel.service,
-    chemical: 'Potable Water',
-    chemicalFamily: 'potable_water',
-    specificGravity: 1.0,
-  },
-  certs: {
-    ...baseFRPVessel.certs,
-    nsfAnsi61Required: true,
-  },
-  wallBuildup: { resinId: 'hetron-922' },
-};
-
-/* ── Double-wall storage tank — adds secondary containment ─── */
-const doubleWallDefaults: TankTypeDefaults = {
-  ...baseFRPVessel,
-  accessories: {
-    ...EMPTY_ACCESSORIES,
-    insulation: '1_layer',
-    liquidLevelIndicator: true,
-  },
-};
-
-/* ── Liquid fertilizer — 1.30 SG iso polyester adequate ─── */
-const liquidFertilizerDefaults: TankTypeDefaults = {
-  ...baseFRPVessel,
-  service: {
-    ...baseFRPVessel.service,
-    chemical: 'Liquid Fertilizer (UAN-32)',
-    chemicalFamily: 'dilute_acid',
-    specificGravity: 1.32,
-  },
-  wallBuildup: { resinId: 'aropol-q-6376' },
-};
-
-/* ── Composite structures — minimal defaults ─── */
-const compositeDefaults: TankTypeDefaults = {
-  ...baseFRPVessel,
-  service: { ...baseFRPVessel.service, chemical: 'Custom FRP composite' },
-};
-
-/* ── Brinemaker (legacy alias for Bryneer-class systems w/o the brand) ── */
-const brinemakerDefaults: TankTypeDefaults = {
-  ...bryneerDefaults,
-  // Same engineering as Bryneer but without the branded SmartBob package.
-  accessories: {
-    ...bryneerDefaults.accessories,
-    smartBob: 'none',
-    bryneerPackage: { ...bryneerDefaults.accessories.bryneerPackage, enabled: false },
-  },
-};
-
 /* ── Public lookup ─────────────────────────────────────────────────── */
 
 export const TANK_TYPE_DEFAULTS: Record<string, TankTypeDefaults> = {
-  frp_vessel:          baseFRPVessel,
-  asme_rtp1_vessel:    rtp1Defaults,
-  process_vessel:      mixingTankDefaults,
-  scrubber:            scrubberDefaults,
-  mixing_tank:         mixingTankDefaults,
-  bryneer:             bryneerDefaults,
-  single_wall_storage: baseFRPVessel,
-  double_wall_storage: doubleWallDefaults,
-  brinemaker:          brinemakerDefaults,
-  liquid_fertilizer:   liquidFertilizerDefaults,
-  caustic:             causticDefaults,
-  deionized_water:     waterDefaults,
-  water:               waterDefaults,
-  greywater:           waterDefaults,
-  bleach:              bleachDefaults,
-  acid:                acidDefaults,
-  ethylene_glycol:     {
-    ...baseFRPVessel,
-    service: {
-      ...baseFRPVessel.service,
-      chemical: 'Ethylene Glycol',
-      chemicalFamily: 'caustic',
-      specificGravity: 1.13,
-      operatingTempF: 100,
-      designTempF: 180,
-    },
-    wallBuildup: { resinId: 'derakane-signia-441' },
-  },
-  frp_composite: compositeDefaults,
+  frp_vessel:       baseFRPVessel,
+  asme_rtp1_vessel: rtp1Defaults,
+  process_vessel:   processVesselDefaults,
+  scrubber:         scrubberDefaults,
+  bryneer:          bryneerDefaults,
 };
+
+// Legacy ids that older revisions may have persisted but the dropdown
+// no longer surfaces. We resolve them silently to FRP Vessel via the
+// fallback in `getDefaultsForTankType` so already-saved quotes never
+// break — the rep just sees `FRP Vessel` selected on reload.
+const _LEGACY_TANK_TYPES_REMOVED = [
+  // Chemistry presets folded into the Chemistry section:
+  'mixing_tank', 'single_wall_storage', 'liquid_fertilizer',
+  'caustic', 'deionized_water', 'water', 'greywater',
+  'bleach', 'acid', 'ethylene_glycol',
+  // Storage / composite categories removed — double-wall is now a
+  // Sidewall checkbox on Step 1, brinemaker collapsed into Bryneer™,
+  // composite structures fold into the Accessories step.
+  'double_wall_storage', 'brinemaker', 'frp_composite',
+] as const;
+void _LEGACY_TANK_TYPES_REMOVED;
 
 export function getDefaultsForTankType(id: string | null | undefined): TankTypeDefaults {
   if (!id) return TANK_TYPE_DEFAULTS.frp_vessel;

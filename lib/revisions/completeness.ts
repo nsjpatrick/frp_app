@@ -46,6 +46,13 @@ export function computeStepCompleteness(args: {
     Number.isFinite(svc.designTempF) &&
     Number.isFinite(svc.specificGravity) &&
     !!wall.resinId &&
+    // Overall vessel geometry — moved from Step 2 so live pricing reacts
+    // as the rep types alongside chemistry. Step 1 won't release until
+    // these are filled.
+    Number.isFinite(geom.idIn)        && (geom.idIn        as number) > 0 &&
+    Number.isFinite(geom.ssHeightIn)  && (geom.ssHeightIn  as number) > 0 &&
+    Number.isFinite(geom.freeboardIn) && (geom.freeboardIn as number) >= 0 &&
+    !!geom.orientation &&
     // Seismic must be from an actual calculation — not defaults. Ss, S1,
     // and wind V are all required > 0 before the step is considered done.
     !!site.seismic &&
@@ -58,10 +65,6 @@ export function computeStepCompleteness(args: {
 
   const step2 =
     step1 &&
-    Number.isFinite(geom.idIn) &&
-    Number.isFinite(geom.ssHeightIn) &&
-    Number.isFinite(geom.freeboardIn) &&
-    !!geom.orientation &&
     !!geom.topHead &&
     !!geom.bottom;
 

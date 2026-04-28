@@ -216,6 +216,81 @@ export const STAINLESS_STAND_LABOR_HRS_BY_GRADE: Record<string, number> = {
   SS17_4PH: 22,
 };
 
+/* ── Veils (Quote2!B25 dropdown — Raw Materials!B25:G28 pricing) ─────
+ *
+ * Surface-veil options the rep picks alongside the resin. Each entry
+ * encodes the per-sqft material cost and a small labor adder (4 hrs of
+ * shell-fab time per ply, per Excel's Labor!821 "A' Veil" line).
+ *
+ * Costs derived from jobcalc12.2.99.xls "Raw Materials":
+ *   - C Veil       — $269.10 per 16 lb / 2691 sqft roll → ~$0.10/sqft per ply
+ *   - Nexus Veil   — $1.08/sqyd → ~$0.12/sqft per ply
+ *   - Carbon Veil  — $14.00/lin yd ($1.56/sqft) for 0.5 oz/yd² (a "premium"
+ *                    grade); $5.80/lin yd ($0.64/sqft) for 1 oz/yd²
+ *
+ * The pricing-engine `buildVeilLine` builder multiplies the per-ply
+ * sqft cost by the shell lateral area + bottom head area.
+ */
+
+export const VEIL_OPTIONS = [
+  {
+    id: 'c_glass_1',
+    label: '1 Ply ‘C’ Glass',
+    plies: 1,
+    costPerSqft: 0.10,
+    notes: 'Default surface veil — corrosion-resistant C-glass.',
+  },
+  {
+    id: 'c_glass_2',
+    label: '2 Ply ‘C’ Glass',
+    plies: 2,
+    costPerSqft: 0.20,
+    notes: 'Double C-veil for harsher chemistry.',
+  },
+  {
+    id: 'nexus_1',
+    label: '1 Ply Nexus',
+    plies: 1,
+    costPerSqft: 0.12,
+    notes: 'Synthetic surfacing veil — better strain resistance than C-glass.',
+  },
+  {
+    id: 'nexus_2',
+    label: '2 Ply Nexus',
+    plies: 2,
+    costPerSqft: 0.24,
+    notes: 'Double Nexus for elastomer-modified service.',
+  },
+  {
+    id: 'c_glass_plus_nexus',
+    label: '1 Ply ‘C’ Glass + 1 Ply Nexus',
+    plies: 2,
+    costPerSqft: 0.22,
+    notes: 'Belt-and-suspenders combo — C-glass barrier + Nexus toughening.',
+  },
+  {
+    id: 'carbon_1',
+    label: '1 Ply Carbon Veil',
+    plies: 1,
+    costPerSqft: 1.56,
+    notes: 'Conductive veil for static-dissipative service (oxidizers, solvents).',
+  },
+  {
+    id: 'carbon_2',
+    label: '2 Ply Carbon Veil',
+    plies: 2,
+    costPerSqft: 3.12,
+    notes: 'Double carbon veil for grounded conductive shell.',
+  },
+] as const;
+
+export type VeilId = (typeof VEIL_OPTIONS)[number]['id'];
+
+export function findVeil(id: string | null | undefined) {
+  if (!id) return null;
+  return VEIL_OPTIONS.find((v) => v.id === id) ?? null;
+}
+
 /* ── Vents (Accessories!B46:R65 — gooseneck / mushroom / V) ─────────── */
 
 export type VentRow = {

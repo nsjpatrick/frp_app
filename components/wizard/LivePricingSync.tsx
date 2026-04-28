@@ -64,17 +64,48 @@ export function LivePricingSync() {
 
       const geometry: Record<string, unknown> = {};
       if (get('orientation'))  geometry.orientation = String(get('orientation'));
-      if (num('idIn')        != null) geometry.idIn        = num('idIn');
-      if (num('ssHeightIn')  != null) geometry.ssHeightIn  = num('ssHeightIn');
+      // Step 1 captures dimensions in feet; the pricing engine works in
+      // inches. Convert at the seam so the rest of the engine stays unit-
+      // consistent.
+      const idFt        = num('idFt');
+      const ssHeightFt  = num('ssHeightFt');
+      const freeboardFt = num('freeboardFt');
+      if (idFt        != null) geometry.idIn        = idFt        * 12;
+      if (ssHeightFt  != null) geometry.ssHeightIn  = ssHeightFt  * 12;
+      if (freeboardFt != null) geometry.freeboardIn = freeboardFt * 12;
       if (num('quantity')    != null) geometry.quantity    = num('quantity');
-      if (form.querySelector('input[name="baffles"]')) {
-        geometry.baffles = checked('baffles');
+      // Baffles — count > 0 is the on/off signal now that the explicit
+      // toggle was retired. We infer `baffles: true/false` from the count
+      // so the pricing engine's existing gate keeps working.
+      if (form.querySelector('input[name="baffleCount"]')) {
         const bc = num('baffleCount');
-        if (bc != null) geometry.baffleCount = bc;
+        if (bc != null) {
+          geometry.baffleCount = bc;
+          geometry.baffles = bc > 0;
+        }
+        const bl = num('baffleLengthFt');
+        if (bl != null) geometry.baffleLengthFt = bl;
       }
       if (form.querySelector('input[name="stainlessStand"]')) {
         geometry.stainlessStand = checked('stainlessStand');
         if (get('stainlessGrade')) geometry.stainlessGrade = String(get('stainlessGrade'));
+      }
+      if (form.querySelector('select[name="standType"]')) {
+        geometry.standType = String(get('standType'));
+      }
+      if (num('standHeightFt') != null) geometry.standHeightFt = num('standHeightFt');
+      if (form.querySelector('input[name="doubleWall"]')) {
+        geometry.doubleWall = checked('doubleWall');
+      }
+      if (form.querySelector('select[name="topHead"]') ||
+          form.querySelector('input[name="topHead"]')) {
+        const top = String(get('topHead') ?? '');
+        if (top) geometry.topHead = top;
+      }
+      if (form.querySelector('select[name="bottom"]') ||
+          form.querySelector('input[name="bottom"]')) {
+        const bot = String(get('bottom') ?? '');
+        if (bot) geometry.bottom = bot;
       }
       if (nozzles) geometry.nozzles = nozzles;
 
@@ -98,10 +129,14 @@ export function LivePricingSync() {
       }
 
       // Service — just the knobs pricing engine uses. Chemistry name /
-      // family / concentration don't affect price; only `postCure` does.
+      // family / concentration don't affect price; only `postCure` and
+      // `minAmbientTempF` (HTD ΔT driver) do.
       const service: Record<string, unknown> = {};
       if (form.querySelector('input[name="postCure"]')) {
         service.postCure = checked('postCure');
+      }
+      if (num('minAmbientTempF') != null) {
+        service.minAmbientTempF = num('minAmbientTempF');
       }
 
       // Certs — RTP-1 class + NSF toggles + inspector.
@@ -120,9 +155,10 @@ export function LivePricingSync() {
         certs.thirdPartyInspector = String(get('thirdPartyInspector'));
       }
 
-      // Wall buildup — only the resin id.
+      // Wall buildup — resin + surface veil.
       const wallBuildup: Record<string, unknown> = {};
       if (get('resinId')) wallBuildup.resinId = String(get('resinId'));
+      if (get('veilId'))  wallBuildup.veilId  = String(get('veilId'));
 
       return { geometry, service, certs, wallBuildup };
     };

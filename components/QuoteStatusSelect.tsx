@@ -100,23 +100,30 @@ export function QuoteStatusSelect({
           style={{ boxShadow: '0 10px 30px -8px rgba(15, 23, 42, 0.25), 0 2px 6px rgba(15, 23, 42, 0.08)' }}
           onClick={(e) => e.stopPropagation()}
         >
-          {STATUSES.map((s) => {
-            const active = s.value === current;
-            return (
-              <button
-                key={s.value}
-                type="button"
-                role="menuitem"
-                onClick={() => pickStatus(s.value)}
-                className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] text-left transition-colors ${
-                  active ? 'bg-slate-50' : 'hover:bg-slate-100'
-                }`}
-              >
-                <span className={`${s.chip} !px-2 !py-0.5 text-[11px]`}>{s.label}</span>
-                {active && <span className="ml-auto text-[11px] text-amber-700 font-medium">Current</span>}
-              </button>
-            );
-          })}
+          {STATUSES
+            // DRAFT is a one-way door — once the quote has been sent,
+            // engineering/ops own its lifecycle and reverting would
+            // misrepresent customer-facing state. We drop it from the
+            // selectable list whenever the current status isn't DRAFT;
+            // the server action enforces the same rule defensively.
+            .filter((s) => s.value !== 'DRAFT' || current === 'DRAFT')
+            .map((s) => {
+              const active = s.value === current;
+              return (
+                <button
+                  key={s.value}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => pickStatus(s.value)}
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] text-left transition-colors ${
+                    active ? 'bg-slate-50' : 'hover:bg-slate-100'
+                  }`}
+                >
+                  <span className={`${s.chip} !px-2 !py-0.5 text-[11px]`}>{s.label}</span>
+                  {active && <span className="ml-auto text-[11px] text-amber-700 font-medium">Current</span>}
+                </button>
+              );
+            })}
         </div>
       )}
     </div>

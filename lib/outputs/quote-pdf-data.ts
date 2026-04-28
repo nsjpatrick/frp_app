@@ -1,7 +1,9 @@
-import { SEED_RESINS } from '@/lib/catalog/seed-data';
+import { CHEMICAL_FAMILY_LABEL, SEED_RESINS } from '@/lib/catalog/seed-data';
+import type { ChemicalFamily } from '@/lib/catalog/seed-data';
 import { TANK_TYPE_BY_ID } from '@/lib/catalog/tank-types';
 import { formatFormula, formatUSD } from '@/lib/format';
 import { computePricing } from '@/lib/pricing/pricing-engine';
+import { VEIL_OPTIONS } from '@/lib/pricing/jobcalc-catalog';
 
 /**
  * Shape the Quote PDF renders from. Flat, serializable, and derived from
@@ -45,16 +47,23 @@ export type QuotePdfData = {
     ssHeightIn: number | null;
     idFt: string;            // "6'-0\""
     ssHeightFt: string;
+    freeboardFt: string;     // "1'-0\"" — empty space above liquid
     capacityGal: string;     // approximate, from cylinder volume
     topHead: string;         // "Open top" / "Closed, flanged & dished" / etc.
     bottom: string;          // "Flat" / "Dished" / "Conical"
+    sidewall: string;        // "Single-wall" / "Double-wall"
     quantity: number;        // ≥ 1. Surfaces as a line item when > 1.
+    color: string;           // "Wax" / "White gelcoat" / etc.
+    installationLocation: string; // "Indoor" / "Outdoor"
   };
   service: {
     chemical: string;        // formula-subscripted
+    chemicalFamily: string;  // "Dilute Acid" / "Caustic" / etc.
+    concentrationPct: string;// "26%" or "—"
     specificGravity: string; // "1.22"
     operatingTempF: string;
     designTempF: string;
+    minAmbientTempF: string;
     operatingPressurePsig: string;
     vacuumPsig: string;
     postCure: boolean;
@@ -69,23 +78,54 @@ export type QuotePdfData = {
   resin: {
     name: string;
     supplier: string;
+    veil: string;             // surface-veil label ("1 ply C-glass" / "—")
     corrosionBarrier: string; // standard barrier text
   };
   certifications: {
     asmeRtp1Class: string | null;
     nsfAnsi61: boolean;
     nsfAnsi2: boolean;
+    astmD3299: boolean;
+    astmD4097: boolean;
+    astmD5685: boolean;
+    peStamp: boolean;
+    iccEsListed: boolean;
     thirdPartyInspector: boolean;
   };
-  accessories: string[];     // bulleted list — nozzles + manway + stand + etc.
+  baffles: {
+    count: number;
+    type: string;             // "Plate" / "Wedge"
+    lengthFt: string;         // "10.8'"
+  };
+  stand: {
+    type: string;             // "FRP" / "Stainless 304" / "FRP Skirt" / "None"
+    heightFt: string;         // "4'"
+  };
+  nozzles: Array<{
+    type: string;
+    sizeNps: string;
+    rating: string;
+    quantity: number;
+  }>;
+  accessories: {
+    summary: string[];        // bulleted high-level list (legacy "Accessories Included")
+    detail: AccessoryDetailRow[]; // grouped row data for the full Accessories table
+  };
   pricing: {
-    unitPrice: string;              // Per-vessel price ("$48,512")
-    quantity: number;               // Mirrored here so the renderer only reaches one object.
-    lineExtended: string;           // unitPrice × quantity
-    freight: string;                // "$1,600"
-    totalDelivered: string;         // lineExtended + freight
+    /** The single bottom-line number the customer sees. Itemized line-
+     *  items (per-vessel, freight, qty extension) are intentionally
+     *  omitted from the PDF — internal pricing detail isn't shared with
+     *  the customer. */
+    totalDelivered: string;
+    quantity: number;
   };
   clarifications: string[];
+};
+
+export type AccessoryDetailRow = {
+  group: string;              // section header ("Access", "Indicators", …)
+  label: string;              // field name ("Manway", "SmartBob", …)
+  value: string;              // human-readable selection ("24″ side flanged")
 };
 
 const CAP_PER_CYL_IN3 = Math.PI; // unit helper — placeholder so we can inline the volume formula below.
@@ -162,6 +202,31 @@ const ORIENTATION_LABEL: Record<string, string> = {
   horizontal: 'Horizontal',
 };
 
+const COLOR_LABEL: Record<string, string> = {
+  wax:   'Wax (clear UV topcoat)',
+  white: 'White gelcoat',
+  grey:  'Grey gelcoat',
+  other: 'Custom (per quote notes)',
+};
+
+const LOCATION_LABEL: Record<string, string> = {
+  indoor:  'Indoor',
+  outdoor: 'Outdoor',
+};
+
+const STAND_LABEL: Record<string, string> = {
+  none:  'None (ring-supported)',
+  frp:   'FRP',
+  ss304: 'Stainless 304',
+  ss316: 'Stainless 316',
+  skirt: 'FRP Skirt',
+};
+
+const BAFFLE_TYPE_LABEL: Record<string, string> = {
+  plate: 'Plate',
+  wedge: 'Wedge',
+};
+
 /**
  * Map Revision + Quote JSON onto the flat PDF view-model. Everything the
  * PDF renders flows through here, so if a new configurator field should
@@ -222,23 +287,24 @@ export function buildQuotePdfData(args: {
   const astmSpec  = isFilamentWound ? 'ASTM D-3299-18' : 'ASTM D-4097-19';
   const astmLabel = isFilamentWound ? 'filament-wound' : 'contact-molded';
 
-  // Accessories list. Nozzles aggregate by type; manway + stand add from
-  // geometry flags.
-  const accessories: string[] = [];
-  const nozzles: Array<{ type: string; quantity: number; size?: string }> = Array.isArray(geom.nozzles) ? geom.nozzles : [];
+  // High-level summary list (legacy "Accessories Included" bullets).
+  const accessoriesSummary: string[] = [];
+  const nozzles: Array<{ type: string; sizeNps?: string; rating?: string; quantity: number }> = Array.isArray(geom.nozzles) ? geom.nozzles : [];
   const byType: Record<string, number> = {};
   for (const n of nozzles) {
     byType[n.type] = (byType[n.type] ?? 0) + (Number(n.quantity) || 0);
   }
   for (const [type, qty] of Object.entries(byType)) {
-    accessories.push(`${qty} × ${type}${qty === 1 ? '' : 's'}`);
+    accessoriesSummary.push(`${qty} × ${type}${qty === 1 ? '' : 's'}`);
   }
-  if (geom.manway) accessories.push('24" manway with bolted, gasketed cover');
-  if (geom.baffles) accessories.push(`${geom.baffleCount ?? 4} internal baffles`);
-  if (geom.stainlessStand) accessories.push('Stainless steel support stand');
-  if (geom.ladder) accessories.push('Exterior access ladder');
-  if (geom.liftingLugs) accessories.push('Integral lifting lugs');
-  if (accessories.length === 0) accessories.push('Per specification');
+  if (geom.manway) accessoriesSummary.push('24" manway with bolted, gasketed cover');
+  if (geom.baffles) accessoriesSummary.push(`${geom.baffleCount ?? 4} internal baffles`);
+  if (geom.stainlessStand) accessoriesSummary.push('Stainless steel support stand');
+  if (geom.ladder) accessoriesSummary.push('Exterior access ladder');
+  if (geom.liftingLugs) accessoriesSummary.push('Integral lifting lugs');
+  if (accessoriesSummary.length === 0) accessoriesSummary.push('Per specification');
+
+  const accessoryDetail = buildAccessoryDetail(geom.accessories ?? null);
 
   // Pricing flows through the V0 engine so every surface (PDF, email,
   // live rail, quote detail) reads one number. Engine reacts to quantity
@@ -251,9 +317,9 @@ export function buildQuotePdfData(args: {
     wallBuildup: wall,
   });
   const quantity = pricing.quantity;
-  const unitPrice = formatUSD(pricing.unitPrice);
-  const lineExtended = formatUSD(pricing.extendedPrice);
-  const freight = formatUSD(pricing.freight);
+  // Customer-facing PDF only shows the bottom-line total. Per-vessel /
+  // freight / qty extension stay internal — they're surfaced in the
+  // pricing rail and engineering JSON, never the quote.
   const totalDelivered = formatUSD(pricing.totalDelivered);
 
   const clarifications: string[] = [
@@ -304,16 +370,24 @@ export function buildQuotePdfData(args: {
       ssHeightIn: geom.ssHeightIn ?? null,
       idFt: inchesToFeetInches(geom.idIn),
       ssHeightFt: inchesToFeetInches(geom.ssHeightIn),
+      freeboardFt: inchesToFeetInches(geom.freeboardIn),
       capacityGal: gallonsFromCylinder(geom.idIn, geom.ssHeightIn),
       topHead: labelFromEnum(geom.topHead, TOP_LABEL),
       bottom: labelFromEnum(geom.bottom, BOTTOM_LABEL),
+      sidewall: geom.doubleWall ? 'Double-wall (integral secondary containment)' : 'Single-wall',
       quantity,
+      color: labelFromEnum(svc.tankColor, COLOR_LABEL),
+      installationLocation: labelFromEnum(svc.installationLocation, LOCATION_LABEL),
     },
     service: {
       chemical: formatFormula(svc.chemical) || 'Per RFI',
+      chemicalFamily: CHEMICAL_FAMILY_LABEL[svc.chemicalFamily as ChemicalFamily]
+        ?? labelFromEnum(svc.chemicalFamily),
+      concentrationPct: svc.concentrationPct != null ? `${svc.concentrationPct}%` : '—',
       specificGravity: svc.specificGravity != null ? String(svc.specificGravity) : '—',
       operatingTempF: svc.operatingTempF != null ? `${svc.operatingTempF}°F` : '—',
       designTempF: svc.designTempF != null ? `${svc.designTempF}°F` : '—',
+      minAmbientTempF: svc.minAmbientTempF != null ? `${svc.minAmbientTempF}°F` : '—',
       operatingPressurePsig: svc.operatingPressurePsig != null ? `${svc.operatingPressurePsig} psig` : 'Atmospheric',
       vacuumPsig: svc.vacuumPsig != null ? `${svc.vacuumPsig} psig` : 'None',
       postCure: !!svc.postCure,
@@ -328,6 +402,7 @@ export function buildQuotePdfData(args: {
     resin: {
       name: resin?.name ?? 'Per specification',
       supplier: resin?.supplier ?? '—',
+      veil: VEIL_OPTIONS.find((v) => v.id === wall.veilId)?.label ?? '—',
       corrosionBarrier:
         '100-mil nominal corrosion barrier: C-veil surface mat backed by two plies of chopped strand mat, wet-out with corrosion-grade resin.',
     },
@@ -335,16 +410,171 @@ export function buildQuotePdfData(args: {
       asmeRtp1Class: certs.asmeRtp1Class ?? null,
       nsfAnsi61: !!certs.nsfAnsi61Required,
       nsfAnsi2: !!certs.nsfAnsi2Required,
+      astmD3299: !!certs.astmD3299,
+      astmD4097: !!certs.astmD4097,
+      astmD5685: !!certs.astmD5685,
+      peStamp: !!certs.peStamp,
+      iccEsListed: !!certs.iccEsListed,
       thirdPartyInspector: !!certs.thirdPartyInspector,
     },
-    accessories,
+    baffles: {
+      count: Number(geom.baffleCount ?? 0),
+      type: labelFromEnum(geom.baffleType, BAFFLE_TYPE_LABEL),
+      lengthFt: geom.baffleLengthFt != null && geom.baffleLengthFt > 0
+        ? `${Number(geom.baffleLengthFt).toFixed(1)}'`
+        : geom.ssHeightIn != null
+          ? `${((geom.ssHeightIn / 12) * 0.9).toFixed(1)}' (auto)`
+          : '—',
+    },
+    stand: {
+      type: labelFromEnum(
+        geom.standType ?? (geom.stainlessStand
+          ? (geom.stainlessGrade === 'SS316' || geom.stainlessGrade === 'SS316L' ? 'ss316' : 'ss304')
+          : 'none'),
+        STAND_LABEL,
+      ),
+      heightFt: geom.standHeightFt != null ? `${geom.standHeightFt}'` : '—',
+    },
+    nozzles: nozzles.map((n) => ({
+      type: labelFromEnum(n.type),
+      sizeNps: n.sizeNps ?? '—',
+      rating: n.rating ?? '—',
+      quantity: Number(n.quantity) || 0,
+    })),
+    accessories: {
+      summary: accessoriesSummary,
+      detail: accessoryDetail,
+    },
     pricing: {
-      unitPrice,
-      quantity,
-      lineExtended,
-      freight,
+      // Customer-facing PDF gets only the bottom-line delivered total.
+      // Per-vessel × qty extension and freight are intentionally hidden.
       totalDelivered,
+      quantity,
     },
     clarifications,
   };
+}
+
+/* ── Accessory detail flattener ──────────────────────────────────────
+ * Walks the full Step-2 accessory bundle and produces a list of
+ * group/label/value rows so the review tab and the PDF can both render
+ * a complete table without re-implementing the labeling rules. Empty
+ * rows (no toggle / "none") are dropped so the output stays tight.
+ */
+export function buildAccessoryDetail(a: any): AccessoryDetailRow[] {
+  if (!a || typeof a !== 'object') return [];
+  const rows: AccessoryDetailRow[] = [];
+  const push = (group: string, label: string, value: string | null | undefined) => {
+    if (value == null || value === '' || value === 'None' || value === 'none') return;
+    rows.push({ group, label, value });
+  };
+
+  // ── Access ────────────────────────────────────────────────────
+  if (a.manway && a.manway.type && a.manway.type !== 'none') {
+    push('Access', 'Manway',
+      `${a.manway.diameterIn ?? '—'}″ ${labelFromEnum(a.manway.type)}${a.manway.rtp1Style ? ', RTP-1 style' : ''}`);
+  }
+  if (a.ladder && a.ladder.type && a.ladder.type !== 'none') {
+    const opts = [
+      a.ladder.cage      ? 'cage'        : null,
+      a.ladder.walkthru  ? 'walk-thru'   : null,
+      a.ladder.roofturn  ? 'roof turn'   : null,
+    ].filter(Boolean).join(', ');
+    push('Access', 'Ladder',
+      `${labelFromEnum(a.ladder.type)} (${labelFromEnum(a.ladder.location)}${opts ? '; ' + opts : ''})`);
+  }
+  if (a.handrail && a.handrail.type && a.handrail.type !== 'none') {
+    push('Access', 'Handrail',
+      `${labelFromEnum(a.handrail.type)} (${labelFromEnum(a.handrail.location)}${a.handrail.selfCloseGate ? ', self-closing gate' : ''})`);
+  }
+  if (a.restPlatform) push('Access', 'Rest Platform', 'Included');
+  if (a.safTClimb && a.safTClimb !== 'none') {
+    push('Access', 'Saf-T-Climb', labelFromEnum(a.safTClimb));
+  }
+
+  // ── Anchorage ─────────────────────────────────────────────────
+  if (a.tieDownLugs?.enabled) {
+    push('Anchorage', 'Tie-down lugs',
+      `${a.tieDownLugs.quantity ?? '—'} × ${(a.tieDownLugs.ratingLb ?? 0).toLocaleString()} lb (${labelFromEnum(a.tieDownLugs.grade)})${a.tieDownLugs.encapsulated ? ', encapsulated' : ''}`);
+  }
+  if (a.liftingChannels?.enabled) {
+    push('Anchorage', 'Lifting channels',
+      `${a.liftingChannels.quantity ?? '—'} × ${labelFromEnum(a.liftingChannels.grade)}${a.liftingChannels.encapsulated ? ', encapsulated' : ''}`);
+  }
+  if (a.agitatorSupport?.enabled) {
+    push('Anchorage', 'Agitator support',
+      `Included${a.agitatorSupport.encapsulated ? ' (encapsulated)' : ''}`);
+  }
+  if (a.mixerPad) push('Anchorage', 'Mixer pad', 'Included');
+
+  // ── Process fittings ──────────────────────────────────────────
+  if (Array.isArray(a.vents)) {
+    for (const v of a.vents) {
+      push('Process', 'Vent',
+        `${v.quantity ?? 1} × ${v.sizeIn ?? '—'}″ ${labelFromEnum(v.kind)}`);
+    }
+  }
+  if (Array.isArray(a.dipPipes)) {
+    for (const d of a.dipPipes) {
+      push('Process', 'Dip pipe',
+        `${d.diameterIn ?? '—'}″ Ø × ${d.lengthIn ?? '—'}″`);
+    }
+  }
+  if (Array.isArray(a.blindFlanges)) {
+    for (const b of a.blindFlanges) {
+      push('Process', 'Blind flange',
+        `${b.quantity ?? 1} × ${b.diameterIn ?? '—'}″ ${labelFromEnum(b.material)}`);
+    }
+  }
+  if (a.sightGlass?.enabled) {
+    push('Process', 'Sight glass', `${a.sightGlass.sizeIn ?? '—'}″`);
+  }
+  if (a.splitHingedTopCover) push('Process', 'Top cover', 'Split-hinged');
+
+  // ── Insulation & Heat Trace ───────────────────────────────────
+  if (a.insulation && a.insulation !== 'none') {
+    push('Insulation', 'Foam insulation',
+      a.insulation === '1_layer' ? '1″ layer' : '2″ layer');
+  }
+  if (a.plastatherm?.enabled) {
+    push('Insulation', 'Heater Configurator',
+      `${a.plastatherm.operatingVoltage}V — maintain ${a.plastatherm.maintainTempF}°F`);
+    push('Insulation', 'HTD insulation',
+      `${a.plastatherm.insulationThicknessIn}″ ${labelFromEnum(a.plastatherm.insulationType)}`);
+    push('Insulation', 'Wind / safety factor',
+      `${a.plastatherm.windSpeedMph} mph · ${Math.round((a.plastatherm.safetyFactor ?? 0) * 100)}%`);
+    push('Insulation', 'Supports',
+      `${a.plastatherm.numSupports ?? 0} × ${labelFromEnum(a.plastatherm.supportStyle)}`);
+    if (a.plastatherm.manwayInsulated) push('Insulation', 'Manways insulated', 'Yes');
+  }
+
+  // ── Indicators / signage ──────────────────────────────────────
+  if (a.smartBob && a.smartBob !== 'none') push('Indicators', 'SmartBob', labelFromEnum(a.smartBob));
+  if (a.liquidLevelIndicator) push('Indicators', 'Liquid-level indicator', 'Included');
+  if (a.nameplate) push('Indicators', 'Nameplate', 'Included');
+  if (a.ventTags) push('Indicators', 'Vent tags', 'Included');
+  if (a.pipeSupportClips && a.pipeSupportClips > 0) {
+    push('Indicators', 'Pipe-support clips', `${a.pipeSupportClips}`);
+  }
+
+  // ── Documentation / QA ────────────────────────────────────────
+  if (a.hydrotest) push('Documentation', 'Hydrotest', 'Included');
+  if (a.oAndMManuals && a.oAndMManuals > 0) {
+    push('Documentation', 'O&M manuals', `${a.oAndMManuals}`);
+  }
+  if (a.peCalcs) push('Documentation', 'PE calcs', 'Included');
+  if (a.anchorBoltTemplates) push('Documentation', 'Anchor bolt templates', 'Included');
+
+  // ── Bryneer package ───────────────────────────────────────────
+  if (a.bryneerPackage?.enabled) {
+    const inc: string[] = [];
+    if (a.bryneerPackage.breatherBag)      inc.push('breather bag');
+    if (a.bryneerPackage.kamlockCoupling)  inc.push('kamlock');
+    if (a.bryneerPackage.solenoidValve)    inc.push('solenoid');
+    if (a.bryneerPackage.flowValve)        inc.push('flow valve');
+    if (a.bryneerPackage.saltPipeStandoff) inc.push('salt pipe');
+    push('Bryneer', 'Bryneer™ package', inc.length > 0 ? inc.join(', ') : 'Included');
+  }
+
+  return rows;
 }

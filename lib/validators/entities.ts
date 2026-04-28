@@ -48,6 +48,9 @@ export const serviceConditionsSchema = z.object({
   // Optional for backwards compat with revisions captured before the tank-
   // type selector existed; new quotes set it on the Service step.
   tankType: z.string().min(1).optional(),
+  // Chemistry / conditions are required for a complete Step 1 — the form
+  // enforces this via HTML `required`, but we keep the schema strict so
+  // a malformed POST hits a clear error instead of silently saving zeros.
   chemical: z.string().min(1),
   chemicalFamily: z.string(),
   concentrationPct: z.number().min(0).max(100).optional(),
@@ -59,9 +62,42 @@ export const serviceConditionsSchema = z.object({
   // Optional thermal post-cure after layup (commonly 180–220°F / 4–8 hours)
   // to improve chemical resistance and elevated-temperature performance.
   postCure: z.boolean().default(false),
+  /** Minimum ambient temperature (°F) at the install site. Drives the
+   *  HTD heat-loss calculation (ΔT = maintain − min ambient). Defaults
+   *  to 0 °F to match the workbook's worst-case assumption. */
+  minAmbientTempF: z.number().min(-50).max(120).default(0),
+  // Where the vessel will live — drives ladder/handrail location defaults
+  // and the gel-coat / paint package on the outer skin (jobcalc B28).
+  installationLocation: z.enum(['indoor', 'outdoor']).default('outdoor'),
+  // Outer-shell color (jobcalc Quote2!I20 dropdown). Wax = a clear UV
+  // wax topcoat (jobcalc default for indoor service); pigmented gelcoats
+  // get an "Other" custom-color slot for spec-specific shades.
+  tankColor: z.enum(['wax', 'white', 'grey', 'other']).default('wax'),
+});
+
+/**
+ * Overall vessel geometry — moved from Step 2 to Step 1 so the rep can
+ * see live pricing react as they type idIn / ssHeightIn alongside the
+ * service conditions. Step 2 still owns heads, nozzles, baffles, the
+ * stainless stand, and the full Accessories bundle; Step 1 owns this
+ * thin slice of geometry that drives capacity / wall thickness / weight.
+ *
+ * Validated on save — empty fields prevent advancing to Step 2.
+ */
+export const overallGeometrySchema = z.object({
+  orientation: z.enum(['vertical', 'horizontal']),
+  idIn: z.number().positive(),
+  ssHeightIn: z.number().positive(),
+  freeboardIn: z.number().nonnegative(),
+  quantity: z.number().int().min(1).max(99),
+  /** True = double-walled sidewall (integral secondary containment).
+   *  Adds the Excel "Double Wall — Shell + Bottom + Joint Seams + Leak
+   *  Detection" labor/material lines to the price. */
+  doubleWall: z.boolean().default(false),
 });
 
 export const certificationRequirementsSchema = z.object({
+  // ASME RTP-1 — class drives QA tier; null = not required.
   asmeRtp1Class: z.enum(['I', 'II', 'III']).nullable(),
   asmeRtp1StdRevision: z.string().optional(),
   ansiStandards: z.array(z.object({
@@ -69,9 +105,21 @@ export const certificationRequirementsSchema = z.object({
     revision: z.string(),
     scope: z.string().optional(),
   })),
+  // NSF/ANSI listings — only relevant for potable water / sodium-
+  // hypochlorite service (Bryneer, bleach tanks).
   nsfAnsi61Required: z.boolean(),
   nsfAnsi61TargetTempF: z.number().optional(),
   nsfAnsi2Required: z.boolean(),
+  // ASTM specs that govern the layup itself (jobcalc Quote2 spec dropdown).
+  // D-3299 = filament-wound vessels; D-4097 = contact-molded heads.
+  astmD3299: z.boolean().default(true),
+  astmD4097: z.boolean().default(true),
+  astmD5685: z.boolean().default(false),
+  // Optional cert + documentation toggles.
+  peStamp: z.boolean().default(false),
+  iccEsListed: z.boolean().default(false),
+  // Inspector kept on the schema so legacy revisions stay parseable;
+  // UI was retired earlier in favor of the cert-only Certifications section.
   thirdPartyInspector: z.enum(['TUV', 'LLOYDS', 'INTERTEK', 'NONE']).default('NONE'),
   requiredDocuments: z.array(z.string()),
 });
@@ -102,6 +150,14 @@ export const siteEnvSchema = z.object({
 export const STAINLESS_GRADES = [
   'SS304', 'SS304L', 'SS316', 'SS316L', 'SS2205_DUPLEX', 'SS904L', 'SS321', 'SS17_4PH',
 ] as const;
+
+/**
+ * Stand types for the Step-2 "Stands" section. PTI offers FRP, 304 SS,
+ * 316 SS, plus an FRP skirt as an alternative to a discrete leg-stand.
+ * `none` = the vessel sits on its bottom flange / ring-support.
+ */
+export const STAND_TYPES = ['none', 'frp', 'ss304', 'ss316', 'skirt'] as const;
+export type StandType = (typeof STAND_TYPES)[number];
 
 export const NOZZLE_TYPES = [
   'inlet', 'outlet', 'manway', 'vent', 'overflow', 'drain', 'sample', 'instrument',
@@ -225,7 +281,22 @@ export const accessoriesSchema = z.object({
     operatingVoltage: z.enum(['120', '240', '480']).default('120'),
     maintainTempF: z.number().min(0).max(300).default(60),
     minTempF: z.number().min(-50).max(120).default(20),
-  }).default({ enabled: false, operatingVoltage: '120', maintainTempF: 60, minTempF: 20 }),
+    /** HTD inputs — when `enabled`, drive `lib/pricing/htd-engine.ts`
+     *  to compute panel + controller + tape sizing for the heater
+     *  package. All fields default to the HTD workbook's defaults. */
+    insulationType: z.enum(['fiberglass', 'polyurethane', 'polyisocyanurate', 'polystyrene', 'cellular_glass', 'calcium_silicate'])
+      .default('fiberglass'),
+    insulationThicknessIn: z.union([z.literal(1), z.literal(1.5), z.literal(2), z.literal(3), z.literal(4)]).default(2),
+    safetyFactor: z.number().min(0).max(1).default(0.2),
+    windSpeedMph: z.number().min(0).max(200).default(105),
+    manwayInsulated: z.boolean().default(false),
+    supportStyle: z.enum(['saddles', 'legs', 'concrete_pad', 'skirt']).default('concrete_pad'),
+    numSupports: z.number().int().min(0).max(20).default(0),
+  }).default({
+    enabled: false, operatingVoltage: '120', maintainTempF: 60, minTempF: 20,
+    insulationType: 'fiberglass', insulationThicknessIn: 2, safetyFactor: 0.2,
+    windSpeedMph: 105, manwayInsulated: false, supportStyle: 'concrete_pad', numSupports: 0,
+  }),
 
   // ─── Indicators / signage ────────────────────────────────────
   smartBob: z.enum(SMART_BOB).default('none'),
@@ -274,8 +345,23 @@ export const geometrySchema = z.object({
   baffles: z.boolean().default(false),
   baffleCount: z.number().int().nonnegative().default(0),
   baffleType: z.enum(['plate', 'wedge']).default('plate'),
-  // Stainless-steel structural stand / skirt. When stand=true, an explicit
-  // grade must be chosen from the STAINLESS_GRADES tuple above.
+  /** Baffle length in feet. `0` = "auto" (derive 90% of straight-side
+   *  height at price-time). Reps override per service if the agitator
+   *  geometry needs shorter baffles. */
+  baffleLengthFt: z.number().nonnegative().max(50).default(0),
+  /** Double-walled sidewall toggle — owned by Step 1 alongside the
+   *  overall geometry, but lives here on `geometrySchema` because the
+   *  pricing engine reads it from the geometry block.  Defaults false. */
+  doubleWall: z.boolean().default(false),
+  // Vessel stand — FRP, 304/316 SS leg-stand, or an FRP skirt. `none`
+  // means the vessel sits on its bottom flange / ring support.
+  standType: z.enum(STAND_TYPES).default('none'),
+  // Stand height in feet — jobcalc convention is 4 ft so the bottom
+  // discharge nozzle lands at a sensible loading-dock height.
+  standHeightFt: z.number().nonnegative().max(20).default(4),
+  // Legacy stand fields — kept for backwards-compat with persisted
+  // revisions that pre-date `standType`. Once a quote is re-saved we
+  // write only `standType`; readers can derive from either.
   stainlessStand: z.boolean().default(false),
   stainlessGrade: z.enum(STAINLESS_GRADES).nullable().default(null),
   // Full accessory schedule — defaults to all-off so legacy revisions

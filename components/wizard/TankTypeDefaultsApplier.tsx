@@ -53,9 +53,12 @@ export function TankTypeDefaultsApplier() {
       setNative('specificGravity',        d.service.specificGravity);
       setNative('operatingTempF',         d.service.operatingTempF);
       setNative('designTempF',            d.service.designTempF);
+      setNative('minAmbientTempF',        d.service.minAmbientTempF);
       setNative('operatingPressurePsig',  d.service.operatingPressurePsig);
       setNative('vacuumPsig',             d.service.vacuumPsig);
       setNative('postCure',               d.service.postCure);
+      setNative('installationLocation',   d.service.installationLocation);
+      setNative('tankColor',              d.service.tankColor);
 
       // ─── Certs ───────────────────────────────────────────────
       setNative('asmeRtp1Class',          d.certs.asmeRtp1Class ?? '');
@@ -63,18 +66,30 @@ export function TankTypeDefaultsApplier() {
       setNative('nsfAnsi2Required',       d.certs.nsfAnsi2Required);
       setNative('thirdPartyInspector',    d.certs.thirdPartyInspector);
 
-      // ─── Wall buildup (resin) ────────────────────────────────
+      // ─── Wall buildup (resin + veil) ─────────────────────────
       setNative('resinId',                d.wallBuildup.resinId);
+      setNative('veilId',                 d.wallBuildup.veilId);
 
       // ─── Geometry ────────────────────────────────────────────
       setNative('orientation',            d.geometry.orientation);
-      setNative('idIn',                   d.geometry.idIn);
-      setNative('ssHeightIn',             d.geometry.ssHeightIn);
+      // Step 1 size inputs are in feet — defaults are in inches, so divide
+      // by 12 before writing. The form's own onSubmit handler converts
+      // them back to inches for the schema.
+      setNative('idFt',                   d.geometry.idIn        / 12);
+      setNative('ssHeightFt',             d.geometry.ssHeightIn  / 12);
+      setNative('freeboardFt',            d.geometry.freeboardIn / 12);
       setNative('topHead',                d.geometry.topHead);
       setNative('bottom',                 d.geometry.bottom);
-      setNative('freeboardIn',            d.geometry.freeboardIn);
-      setNative('baffles',                d.geometry.baffles);
-      setNative('baffleCount',            d.geometry.baffleCount);
+      setNative('doubleWall',             d.geometry.doubleWall);
+      // The "Include Baffles" toggle was retired — count alone gates
+      // the section. Write the count; if a default has `baffles:true`
+      // but `count:0`, fall back to 4 as a sensible mixing default.
+      setNative('baffleCount',            d.geometry.baffleCount > 0 ? d.geometry.baffleCount : (d.geometry.baffles ? 4 : 0));
+      // Stand — write both the new canonical field and the legacy
+      // boolean+grade pair so any sibling component that hasn't been
+      // updated to read `standType` yet still gets a consistent value.
+      setNative('standType',              d.geometry.stainlessStand ? 'ss316' : 'none');
+      setNative('standHeightFt',          4);
       setNative('stainlessStand',         d.geometry.stainlessStand);
 
       // ─── Stateful sections (broadcast) ───────────────────────
@@ -86,6 +101,35 @@ export function TankTypeDefaultsApplier() {
             service: d.service,
             certs: d.certs,
             wallBuildup: d.wallBuildup,
+          },
+        }),
+      );
+
+      // Direct live-pricing patch so the rail re-prices instantly even on
+      // Step 1, where `AccessoriesSection` isn't mounted to forward the
+      // accessory bundle through the form's hidden input. Mirrors what
+      // `LivePricingSync` would broadcast after a real form change.
+      window.dispatchEvent(
+        new CustomEvent('live-pricing:patch', {
+          detail: {
+            geometry: {
+              orientation: d.geometry.orientation,
+              idIn: d.geometry.idIn,
+              ssHeightIn: d.geometry.ssHeightIn,
+              accessories: d.accessories,
+              nozzles: d.geometry.nozzles,
+            },
+            service: {
+              postCure: d.service.postCure,
+              minAmbientTempF: d.service.minAmbientTempF,
+            },
+            certs: {
+              asmeRtp1Class: d.certs.asmeRtp1Class,
+              nsfAnsi61Required: d.certs.nsfAnsi61Required,
+              nsfAnsi2Required: d.certs.nsfAnsi2Required,
+              thirdPartyInspector: d.certs.thirdPartyInspector,
+            },
+            wallBuildup: { resinId: d.wallBuildup.resinId, veilId: d.wallBuildup.veilId },
           },
         }),
       );

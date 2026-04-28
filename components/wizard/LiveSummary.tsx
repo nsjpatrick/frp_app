@@ -21,7 +21,7 @@ import { TickerValue } from '@/components/TickerValue';
  * the rail stays internally consistent.
  */
 
-const NET_TERMS = ['Net 15', 'Net 30', 'Net 45', 'Net 60', 'Net 90'] as const;
+const NET_TERMS = ['Net 30', 'Net 60'] as const;
 type NetTerm = (typeof NET_TERMS)[number];
 
 type PricingOverlay = Partial<{
@@ -89,43 +89,39 @@ export function LiveSummary({ inputs }: { inputs: PricingInputs }) {
       </div>
 
       {detail && (
-        <details className="group rounded-lg bg-slate-50/70 border border-slate-200/80 px-3 py-2">
-          <summary className="cursor-pointer list-none flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-700">
+        <details className="cost-detail">
+          <summary>
             <span>Cost detail</span>
-            <span className="text-slate-400 group-open:rotate-90 transition-transform">›</span>
+            <span className="chevron" aria-hidden>›</span>
           </summary>
-          <div className="mt-2 space-y-1.5 text-[12px]">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Labor hours</span>
-              <span className="font-mono text-slate-700">
-                {detail.totalAdjustedLaborHrs.toFixed(1)} hr
-              </span>
+          <div className="cost-detail-body">
+            <div className="cost-detail-row">
+              <span className="label">Labor hours</span>
+              <span className="value">{detail.totalAdjustedLaborHrs.toFixed(1)} hr</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Labor cost</span>
-              <span className="font-mono text-slate-700">{usd(detail.laborAmountUsd)}</span>
+            <div className="cost-detail-row">
+              <span className="label">Labor cost</span>
+              <span className="value">{usd(detail.laborAmountUsd)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Material cost</span>
-              <span className="font-mono text-slate-700">{usd(detail.materialAmountUsd)}</span>
+            <div className="cost-detail-row">
+              <span className="label">Material cost</span>
+              <span className="value">{usd(detail.materialAmountUsd)}</span>
             </div>
-            <div className="flex justify-between border-t border-slate-200/60 pt-1.5">
-              <span className="text-slate-500">Cost subtotal</span>
-              <span className="font-mono text-slate-800 font-semibold">
-                {usd(detail.grandTankCostUsd)}
-              </span>
+            <div className="cost-detail-row total">
+              <span className="label">Cost subtotal</span>
+              <span className="value">{usd(detail.grandTankCostUsd)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Sales uplift</span>
-              <span className="font-mono text-slate-700">+{usd(detail.salesUpliftUsd)}</span>
+            <div className="cost-detail-row">
+              <span className="label">Sales uplift</span>
+              <span className="value">+{usd(detail.salesUpliftUsd)}</span>
             </div>
-            <div className="flex justify-between text-[11px] text-slate-400 pt-1">
-              <span>Resin</span>
-              <span className="font-mono">${detail.resinPricePerLb.toFixed(2)}/lb</span>
+            <div className="cost-detail-row subtle" style={{ paddingTop: '0.25rem' }}>
+              <span className="label">Resin</span>
+              <span className="value">${detail.resinPricePerLb.toFixed(2)}/lb</span>
             </div>
-            <div className="flex justify-between text-[11px] text-slate-400">
-              <span>Line items</span>
-              <span className="font-mono">{detail.lineItems.length}</span>
+            <div className="cost-detail-row subtle">
+              <span className="label">Line items</span>
+              <span className="value">{detail.lineItems.length}</span>
             </div>
           </div>
         </details>

@@ -38,7 +38,9 @@ import {
   STAINLESS_STAND_BASE_COST_USD,
   STAINLESS_STAND_LABOR_HRS_BY_GRADE,
   V_VENT_TABLE,
+  VEIL_OPTIONS,
   WALKTHRU_COST_TABLE,
+  findVeil,
   lookupApprox,
   lookupManway,
   lookupNozzle,
@@ -51,6 +53,7 @@ import {
   shellLateralAreaFt2,
 } from './jobcalc-geometry';
 import { computeWallThickness } from '@/lib/rules/wall-thickness';
+import { computeHtdHeaterSizing, type HtdInsulationThickness, type HtdInsulationType, type HtdSupportStyle } from './htd-engine';
 import {
   emptyLine,
   type JobCalcLineItem,
@@ -72,6 +75,23 @@ export type JobCalcInputs = {
     baffles?: boolean;
     baffleCount?: number | null;
     baffleType?: 'plate' | 'wedge' | string | null;
+    /** Baffle length in feet. `0` / undefined = derive 90% of SS height. */
+    baffleLengthFt?: number | null;
+    /** Top-head shape — open_top_cover means the dome doesn't take a
+     *  veil layup (the cover is bolt-on plywood). */
+    topHead?: 'flat' | 'F_AND_D' | 'conical' | 'open_top_cover' | string | null;
+    /** Bottom shape — drives HTD bottom-area calc (flat ring vs dished
+     *  vs conical drain) and the Excel "bottom layup" line item. */
+    bottom?: 'flat_ring_supported' | 'dished' | 'conical_drain' | 'sloped' | string | null;
+    /** True = integral double-wall (secondary containment). Adds the
+     *  Excel "Double Wall — Shell + Bottom + Joint Seams + Leak Det"
+     *  line items at roughly +60% of the base shell-fab cost. */
+    doubleWall?: boolean;
+    /** New canonical stand field — 'none' | 'frp' | 'ss304' | 'ss316' | 'skirt'. */
+    standType?: string | null;
+    /** Legacy fields — preserved on persisted revisions saved before the
+     *  standType refactor. The pricing engine reads `standType` first
+     *  and only falls back to these. */
     stainlessStand?: boolean;
     stainlessGrade?: string | null;
     quantity?: number | null;
@@ -82,6 +102,11 @@ export type JobCalcInputs = {
     postCure?: boolean;
     specificGravity?: number | null;
     operatingPressurePsig?: number | null;
+    operatingTempF?: number | null;
+    designTempF?: number | null;
+    /** Worst-case minimum ambient (°F). Drives the HTD ΔT for the
+     *  Plastatherm heater sizing. */
+    minAmbientTempF?: number | null;
   };
   certs: {
     asmeRtp1Class?: 'I' | 'II' | 'III' | null | string;
@@ -91,6 +116,9 @@ export type JobCalcInputs = {
   };
   wallBuildup: {
     resinId?: string | null;
+    /** Surface veil id from `VEIL_OPTIONS` (e.g. `c_glass_1`,
+     *  `carbon_2`). Drives the veil line-item builder. */
+    veilId?: string | null;
   };
 };
 
@@ -238,12 +266,25 @@ export function buildBaffleLines(inp: JobCalcInputs): JobCalcLineItem[] {
   const row = lookupApprox(BAFFLE_LABOR_TABLE, 'diameterFt', dFt);
   if (!row) return [];
 
+  // Resolve baffle length: explicit override or auto-derive 90% of SS
+  // height (jobcalc convention — baffles stop ~10% above the bottom so
+  // liquid can sweep underneath).
+  const ssHeightFt = (inp.geometry.ssHeightIn ?? 0) / 12;
+  const lengthFt = (inp.geometry.baffleLengthFt && inp.geometry.baffleLengthFt > 0)
+    ? Number(inp.geometry.baffleLengthFt)
+    : ssHeightFt * 0.9;
+
   // Excel applies layup + 4 gussets/baffle + a single cut-out batch.
-  const perBaffleHrs = row.layupHrs + row.gussetHrs * 4;
-  // Material: each baffle is roughly 0.4" × shell-area×0.6 plate of FRP.
-  const baffleArea = (Math.PI * dFt) * 0.6 * count;
+  // Layup hrs scale roughly linearly with baffle length — a 12-ft tank's
+  // baffle takes ~3× the labor of a 4-ft tank's. Use the lookup's base
+  // rate for a "tall" tank (ssHeight ~ 12 ft) and prorate.
+  const lengthMult = ssHeightFt > 0 ? lengthFt / Math.max(ssHeightFt, 1) : 1;
+  const perBaffleHrs = (row.layupHrs * lengthMult) + row.gussetHrs * 4;
+  // Material: each baffle is roughly 0.4" × (width × length) of FRP.
+  // Width ≈ 60% of diameter (Excel platebaffles convention).
+  const baffleArea = dFt * 0.6 * lengthFt * count;
   return [{
-    ...emptyLine('baffles', `Mixing baffles (${count})`, 'finishing', 'fittings'),
+    ...emptyLine('baffles', `Mixing baffles (${count} × ${lengthFt.toFixed(1)}' long)`, 'finishing', 'fittings'),
     shellFabHrs: perBaffleHrs * count + row.cutOutHrs,
     choppedLb: baffleArea * 0.4 * SHELL_FAB_RATIOS.chopLbsPerSqftPerInch,
     resinLb:   baffleArea * 0.4 * SHELL_FAB_RATIOS.resinLbsPerSqftPerInchCB,
@@ -253,15 +294,56 @@ export function buildBaffleLines(inp: JobCalcInputs): JobCalcLineItem[] {
 /* ── Stainless-steel stand (composite — Labor!690:694) ─────────────── */
 
 export function buildStainlessStandLines(inp: JobCalcInputs): JobCalcLineItem[] {
-  if (!inp.geometry.stainlessStand) return [];
-  const grade: string = inp.geometry.stainlessGrade ?? 'SS304';
+  // Resolve standType — prefer the new canonical field, fall back to
+  // the legacy stainlessStand+stainlessGrade pair so quotes saved
+  // before the refactor still price correctly.
+  const explicit = inp.geometry.standType;
+  let kind: 'none' | 'frp' | 'ss304' | 'ss316' | 'skirt';
+  if (explicit && ['none', 'frp', 'ss304', 'ss316', 'skirt'].includes(explicit)) {
+    kind = explicit as typeof kind;
+  } else if (inp.geometry.stainlessStand) {
+    const g = inp.geometry.stainlessGrade ?? 'SS304';
+    kind = (g === 'SS316' || g === 'SS316L') ? 'ss316' : 'ss304';
+  } else {
+    kind = 'none';
+  }
+  if (kind === 'none') return [];
+
+  // FRP skirt is a fabricated layup — labor on the shell-fab side, no
+  // SS buyout. Stainless leg-stands are mostly buyout cost + fittings
+  // labor for the bolt-up.
+  if (kind === 'frp') {
+    return [{
+      ...emptyLine('stand_frp', 'FRP leg-stand (fabricated)', 'shellFab', 'structure'),
+      shellFabHrs: 14,
+      finishingHrs: 4,
+      resinLb:    35,
+      choppedLb:  20,
+      buyoutsUsd: 250, // hardware + brackets
+    }];
+  }
+  if (kind === 'skirt') {
+    const idFt = (inp.geometry.idIn ?? 0) / 12;
+    const skirtHeightFt = 1.5;
+    const sqft = Math.PI * idFt * skirtHeightFt;
+    return [{
+      ...emptyLine('stand_skirt', 'FRP skirt (with 24" pipe stub)', 'shellFab', 'structure'),
+      shellFabHrs: 6 + sqft * 0.4,
+      finishingHrs: 2,
+      resinLb:    sqft * 1.8,
+      choppedLb:  sqft * 0.7,
+      buyoutsUsd: 150,
+    }];
+  }
+  // Stainless 304 / 316
+  const grade = kind === 'ss304' ? 'SS304' : 'SS316';
   const fabHrs = STAINLESS_STAND_LABOR_HRS_BY_GRADE[grade] ?? STAINLESS_STAND_LABOR_HRS_BY_GRADE.SS304;
-  const displayGrade = grade.replace(/^SS/, 'SS ');
+  const displayGrade = kind === 'ss304' ? 'SS 304' : 'SS 316';
   return [{
-    ...emptyLine('ss_stand', `Stainless steel stand (${displayGrade})`, 'fittingsHot', 'structure'),
+    ...emptyLine(`stand_${kind}`, `Stainless steel stand (${displayGrade})`, 'fittingsHot', 'structure'),
     shellFabHrs: 2,
     fittingsHrs: fabHrs,
-    buyoutsUsd:  STAINLESS_STAND_BASE_COST_USD,
+    buyoutsUsd:  STAINLESS_STAND_BASE_COST_USD * (kind === 'ss316' ? 1.12 : 1.0),
   }];
 }
 
@@ -286,7 +368,10 @@ export function buildHorizontalSaddleLines(inp: JobCalcInputs): JobCalcLineItem[
 // vertical tanks unless a stainless stand was configured.
 export function buildRingStandLines(inp: JobCalcInputs): JobCalcLineItem[] {
   if (inp.geometry.orientation === 'horizontal') return [];
-  if (inp.geometry.stainlessStand) return [];
+  // Skip ring-stand if a discrete stand was chosen — the leg-stand /
+  // skirt replaces it.
+  const std = inp.geometry.standType ?? (inp.geometry.stainlessStand ? 'ss304' : 'none');
+  if (std !== 'none') return [];
   const dFt = nominalDiameterFt(inp.geometry.idIn ?? 0);
   if (dFt < 2) return [];
   const row = lookupApprox(RING_STAND_TABLE, 'diameterFt', dFt);
@@ -717,16 +802,47 @@ export function buildInsulationLines(inp: JobCalcInputs): JobCalcLineItem[] {
     });
   }
   if (a.plastatherm?.enabled) {
-    const ssFt = (inp.geometry.ssHeightIn ?? 0) / 12;
     const idFt = (inp.geometry.idIn ?? 0) / 12;
-    // Plastatherm cost per sqft of shell (Raw Materials!H388 = $97.12/tape +
-    // tape qty proportional to circumference).
-    const tapes = Math.max(1, Math.ceil(Math.PI * idFt * ssFt / 60));
-    out.push({
-      ...emptyLine('plastatherm', `Plastatherm heat trace (${a.plastatherm.operatingVoltage}V, maintain ${a.plastatherm.maintainTempF}°F)`, 'fittings', 'options'),
-      fittingsHrs: 3 + (tapes - 1) * 2,
-      buyoutsUsd:  97.12 * tapes + 250, // controller buyout
-    });
+    const ssFt = (inp.geometry.ssHeightIn ?? 0) / 12;
+    if (idFt > 0 && ssFt > 0) {
+      // HTD heater package — full Tank Heat Loss Program calculation.
+      const sizing = computeHtdHeaterSizing({
+        diameterFt:           idFt,
+        heightFt:             ssFt,
+        orientation:         (inp.geometry.orientation === 'horizontal' ? 'horizontal' : 'vertical'),
+        maintainTempF:        Number(a.plastatherm.maintainTempF) || 60,
+        // Prefer the rep's site-wide minimum ambient (Step 1 service)
+        // over the per-trace fallback so the calc tracks the actual
+        // worst-case install condition.
+        minAmbientTempF:      Number(inp.service.minAmbientTempF ?? a.plastatherm.minTempF) || 0,
+        topHead:              (inp.geometry.topHead ?? 'F_AND_D') as 'flat' | 'F_AND_D' | 'conical' | 'open_top_cover',
+        bottom:               (inp.geometry.bottom ?? 'flat_ring_supported') as 'flat_ring_supported' | 'dished' | 'conical_drain' | 'sloped',
+        insulationType:       (a.plastatherm.insulationType as HtdInsulationType) ?? 'fiberglass',
+        insulationThicknessIn:(a.plastatherm.insulationThicknessIn as HtdInsulationThickness) ?? 2,
+        safetyFactor:         Number(a.plastatherm.safetyFactor ?? 0.2),
+        windSpeedMph:         Number(a.plastatherm.windSpeedMph ?? 105),
+        manwayCount:          a.manway && a.manway.type !== 'none' ? 1 : 0,
+        manwayDiameterIn:     Number(a.manway?.diameterIn ?? 24),
+        manwayInsulated:      !!a.plastatherm.manwayInsulated,
+        supportStyle:         (a.plastatherm.supportStyle as HtdSupportStyle) ?? 'concrete_pad',
+        numSupports:          Number(a.plastatherm.numSupports ?? 0),
+      });
+
+      // Install labor: 3 hrs base + 1.5 hrs per panel (panel mounting +
+      // controller wiring). Tape application rolls into the panel hour.
+      const installHrs = 3 + sizing.panels640w * 1.5 + sizing.controllers2xtc * 1.5;
+
+      out.push({
+        ...emptyLine(
+          'plastatherm_htd',
+          `Plastatherm — HTD package (${sizing.panels640w} × 640W panels · ${sizing.controllers2xtc} × 2XTC · ${sizing.aluminumTapeRolls} × tape, ${Math.round(sizing.totalHeatLossW)}W @ ΔT ${Math.round(sizing.deltaTF)}°F)`,
+          'fittings',
+          'options',
+        ),
+        fittingsHrs: installHrs,
+        buyoutsUsd:  sizing.totalCostUsd,
+      });
+    }
   }
   return out;
 }
@@ -857,17 +973,98 @@ export function buildDocumentationLines(inp: JobCalcInputs): JobCalcLineItem[] {
   return out;
 }
 
+/* ── Surface veil (Quote2!B25 — Raw Materials!B25:G28) ──────────────── */
+
+export function buildVeilLine(inp: JobCalcInputs): JobCalcLineItem[] {
+  const v = findVeil(inp.wallBuildup?.veilId) ?? VEIL_OPTIONS[0];
+  const idIn = inp.geometry.idIn ?? 0;
+  const ssHeightIn = inp.geometry.ssHeightIn ?? 0;
+  if (!idIn || !ssHeightIn) return [];
+
+  const idFt        = idIn / 12;
+  const ssFt        = ssHeightIn / 12;
+  const shellSqft   = Math.PI * idFt * ssFt;
+  const headSqft    = Math.PI * (idFt / 2) ** 2;
+  // Veil covers the inner surface — shell + bottom head + 80% of top
+  // (open-top tanks exclude the dome/cover).
+  const top = inp.geometry.topHead ?? 'F_AND_D';
+  const topFactor = top === 'open_top_cover' ? 0 : 0.8;
+  const veiledSqft = shellSqft + headSqft * (1 + topFactor);
+
+  return [{
+    ...emptyLine(`veil:${v.id}`, `Surface veil — ${v.label}`, 'shellFab', 'shell'),
+    // ~4 hrs of shell-fab per ply (Labor!821 "A' Veil" line) plus a small
+    // surface-area-driven add for layup time on larger vessels.
+    shellFabHrs:  v.plies * 4 + veiledSqft * 0.005,
+    buyoutsUsd:   veiledSqft * v.costPerSqft,
+  }];
+}
+
+/* ── Double wall (Labor!790-795 — cardboard core + extra shell + bottom + seams) */
+
+export function buildDoubleWallLines(inp: JobCalcInputs): JobCalcLineItem[] {
+  if (!inp.geometry.doubleWall) return [];
+  const idIn = inp.geometry.idIn ?? 0;
+  const ssHeightIn = inp.geometry.ssHeightIn ?? 0;
+  if (!idIn || !ssHeightIn) return [];
+
+  const idFt        = idIn / 12;
+  const ssFt        = ssHeightIn / 12;
+  const shellSqft   = Math.PI * idFt * ssFt;
+  const headSqft    = Math.PI * (idFt / 2) ** 2;
+
+  // Cardboard core spacer between primary + secondary shells (Excel
+  // Labor!790, "Double Wall - Cardboard"): ~0.0933 lb/sqft + buyout.
+  const cardboard: JobCalcLineItem = {
+    ...emptyLine('double_wall_cardboard', 'Double-wall — cardboard core spacer', 'shellFab', 'shell'),
+    shellFabHrs:  4 + shellSqft * 0.04,
+    buyoutsUsd:   shellSqft * 0.0933 + 35.03,
+  };
+  // Outer shell + structural buildup (Labor!791): ~60% of the primary
+  // shell's resin/chop tonnage at fittingsHot markup.
+  const outerShell: JobCalcLineItem = {
+    ...emptyLine('double_wall_shell', 'Double-wall — outer shell + structure', 'shellFab', 'shell'),
+    shellFabHrs:  10 + shellSqft * 0.18,
+    finishingHrs: 4 + shellSqft * 0.04,
+    resinLb:      shellSqft * 1.6,
+    choppedLb:    shellSqft * 0.6,
+    windingLb:    shellSqft * 0.8,
+  };
+  // Outer bottom (Labor!792).
+  const bottom: JobCalcLineItem = {
+    ...emptyLine('double_wall_bottom', 'Double-wall — outer bottom', 'shellFab', 'shell'),
+    shellFabHrs:  6 + headSqft * 0.18,
+    resinLb:      headSqft * 1.6,
+    choppedLb:    headSqft * 0.6,
+  };
+  // Extra joint seams + horizontal head seams (Labor!793-794).
+  const seams: JobCalcLineItem = {
+    ...emptyLine('double_wall_seams', 'Double-wall — extra joint + head seams', 'finishing', 'finishing'),
+    finishingHrs: 3 + ssFt * 0.4,
+  };
+  // Leak-detection assembly (Labor!795 + Raw Materials!F552).
+  const leakDet: JobCalcLineItem = {
+    ...emptyLine('double_wall_leak_det', 'Double-wall — leak-detection strobe + assembly', 'fittings', 'tests'),
+    fittingsHrs:  2,
+    buyoutsUsd:   215, // Raw Materials assembly + freight
+  };
+
+  return [cardboard, outerShell, bottom, seams, leakDet];
+}
+
 /* ── Aggregator ─────────────────────────────────────────────────────── */
 
 export function buildAllLines(inp: JobCalcInputs): JobCalcLineItem[] {
   return [
     ...buildShellFabLines(inp),
+    ...buildVeilLine(inp),
     ...buildNozzleLines(inp),
     ...buildManwayLines(inp),
     ...buildVentLines(inp),
     ...buildBlindFlangeLines(inp),
     ...buildDipPipeLines(inp),
     ...buildBaffleLines(inp),
+    ...buildDoubleWallLines(inp),
     ...buildStainlessStandLines(inp),
     ...buildHorizontalSaddleLines(inp),
     ...buildRingStandLines(inp),

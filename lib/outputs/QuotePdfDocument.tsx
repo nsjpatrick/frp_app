@@ -137,6 +137,40 @@ const styles = StyleSheet.create({
   listRow:      { flexDirection: 'row', marginBottom: 3 },
   listDot:      { width: 10, color: C.amber, fontWeight: 700 },
   listItem:     { flex: 1, fontSize: 9.5, color: C.body },
+  // ── Accessory grouped table ────────────────────────────────────────────
+  accessoryGroup:{
+    fontSize: 8,
+    fontWeight: 700,
+    color: C.amber,
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+    marginTop: 2,
+    marginBottom: 3,
+  },
+  kvRowLine:    { flexDirection: 'row', paddingVertical: 1.5 },
+  kvLabelInline:{ fontSize: 9, fontWeight: 500, color: C.soft, width: 130 },
+  kvValueInline:{ flex: 1, fontSize: 9, color: C.ink },
+  // ── Nozzle table ───────────────────────────────────────────────────────
+  nozzleHeader: {
+    flexDirection: 'row',
+    borderBottom: `1pt solid ${C.hairline}`,
+    paddingBottom: 4,
+    marginBottom: 4,
+  },
+  nozzleHeaderText:{
+    fontSize: 7.5,
+    fontWeight: 600,
+    color: C.muted,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  nozzleRow: {
+    flexDirection: 'row',
+    paddingVertical: 2,
+  },
+  nozzleCellWide: { flex: 2, fontSize: 9.5, color: C.ink },
+  nozzleCell:     { flex: 1, fontSize: 9.5, color: C.body },
+  nozzleCellQty:  { width: 30, fontSize: 9.5, color: C.body, textAlign: 'right' },
   // ── Price callout ───────────────────────────────────────────────────────
   priceCard: {
     marginTop: 8,
@@ -336,16 +370,40 @@ export function QuotePdfDocument({ data }: { data: QuotePdfData }) {
               <Text style={styles.kvValue}>{data.vessel.capacityGal}</Text>
             </View>
             <View style={styles.kvCellThird}>
-              <Text style={styles.kvLabel}>Bottom</Text>
-              <Text style={styles.kvValue}>{data.vessel.bottom}</Text>
-            </View>
-            <View style={styles.kvCellThird}>
               <Text style={styles.kvLabel}>Top Head</Text>
               <Text style={styles.kvValue}>{data.vessel.topHead}</Text>
             </View>
             <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>Bottom</Text>
+              <Text style={styles.kvValue}>{data.vessel.bottom}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>Sidewall</Text>
+              <Text style={styles.kvValue}>{data.vessel.sidewall}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>Freeboard</Text>
+              <Text style={styles.kvValue}>{data.vessel.freeboardFt}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>Quantity</Text>
+              <Text style={styles.kvValue}>{data.vessel.quantity}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>Color</Text>
+              <Text style={styles.kvValue}>{data.vessel.color}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>Installation</Text>
+              <Text style={styles.kvValue}>{data.vessel.installationLocation}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
               <Text style={styles.kvLabel}>Resin System</Text>
               <Text style={styles.kvValue}>{data.resin.name}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>Surface Veil</Text>
+              <Text style={styles.kvValue}>{data.resin.veil}</Text>
             </View>
           </View>
         </View>
@@ -360,6 +418,14 @@ export function QuotePdfDocument({ data }: { data: QuotePdfData }) {
               <Text style={styles.kvValue}>{data.service.chemical}</Text>
             </View>
             <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>Family</Text>
+              <Text style={styles.kvValue}>{data.service.chemicalFamily}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>Concentration</Text>
+              <Text style={styles.kvValue}>{data.service.concentrationPct}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
               <Text style={styles.kvLabel}>Specific Gravity</Text>
               <Text style={styles.kvValue}>{data.service.specificGravity}</Text>
             </View>
@@ -370,6 +436,10 @@ export function QuotePdfDocument({ data }: { data: QuotePdfData }) {
             <View style={styles.kvCellThird}>
               <Text style={styles.kvLabel}>Design Temp</Text>
               <Text style={styles.kvValue}>{data.service.designTempF}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>Min Ambient</Text>
+              <Text style={styles.kvValue}>{data.service.minAmbientTempF}</Text>
             </View>
             <View style={styles.kvCellThird}>
               <Text style={styles.kvLabel}>Pressure</Text>
@@ -383,45 +453,140 @@ export function QuotePdfDocument({ data }: { data: QuotePdfData }) {
           <Text style={[styles.para, { marginTop: 8, color: C.soft }]}>{envSummary}</Text>
         </View>
 
-        {/* Accessories */}
+        {/* Certifications */}
         <View style={styles.section}>
-          <Text style={styles.sectionHead}>Accessories Included</Text>
+          <Text style={styles.sectionHead}>Certifications &amp; Specs</Text>
           <View style={styles.sectionRule} />
-          {data.accessories.map((a, i) => (
-            <View style={styles.listRow} key={i}>
-              <Text style={styles.listDot}>·</Text>
-              <Text style={styles.listItem}>{a}</Text>
+          <View style={styles.kvGrid}>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>ASME RTP-1</Text>
+              <Text style={styles.kvValue}>{data.certifications.asmeRtp1Class
+                ? `Class ${data.certifications.asmeRtp1Class}`
+                : '—'}</Text>
             </View>
-          ))}
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>NSF/ANSI 61</Text>
+              <Text style={styles.kvValue}>{data.certifications.nsfAnsi61 ? 'Required' : '—'}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>NSF/ANSI 2</Text>
+              <Text style={styles.kvValue}>{data.certifications.nsfAnsi2 ? 'Required' : '—'}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>ASTM D-3299</Text>
+              <Text style={styles.kvValue}>{data.certifications.astmD3299 ? 'Yes' : '—'}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>ASTM D-4097</Text>
+              <Text style={styles.kvValue}>{data.certifications.astmD4097 ? 'Yes' : '—'}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>ASTM D-5685</Text>
+              <Text style={styles.kvValue}>{data.certifications.astmD5685 ? 'Yes' : '—'}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>P.E. Stamp</Text>
+              <Text style={styles.kvValue}>{data.certifications.peStamp ? 'Yes' : '—'}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>ICC-ES Listed</Text>
+              <Text style={styles.kvValue}>{data.certifications.iccEsListed ? 'Yes' : '—'}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>Inspector</Text>
+              <Text style={styles.kvValue}>{data.certifications.thirdPartyInspector ? 'Third-party' : '—'}</Text>
+            </View>
+          </View>
         </View>
 
-        {/* Pricing */}
+        {/* Internals — baffles + stand */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHead}>Internals &amp; Support</Text>
+          <View style={styles.sectionRule} />
+          <View style={styles.kvGrid}>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>Baffles</Text>
+              <Text style={styles.kvValue}>
+                {data.baffles.count > 0
+                  ? `${data.baffles.count} × ${data.baffles.type}, ${data.baffles.lengthFt}`
+                  : 'None'}
+              </Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>Stand</Text>
+              <Text style={styles.kvValue}>{data.stand.type}</Text>
+            </View>
+            <View style={styles.kvCellThird}>
+              <Text style={styles.kvLabel}>Stand Height</Text>
+              <Text style={styles.kvValue}>
+                {data.stand.type.toLowerCase().includes('none') ? '—' : data.stand.heightFt}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Nozzle schedule */}
+        {data.nozzles.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionHead}>Nozzles &amp; Connections</Text>
+            <View style={styles.sectionRule} />
+            <View style={styles.nozzleHeader}>
+              <Text style={[styles.nozzleCellWide, styles.nozzleHeaderText]}>Type</Text>
+              <Text style={[styles.nozzleCell, styles.nozzleHeaderText]}>Size</Text>
+              <Text style={[styles.nozzleCell, styles.nozzleHeaderText]}>Rating</Text>
+              <Text style={[styles.nozzleCellQty, styles.nozzleHeaderText]}>Qty</Text>
+            </View>
+            {data.nozzles.map((n, i) => (
+              <View style={styles.nozzleRow} key={i}>
+                <Text style={styles.nozzleCellWide}>{n.type}</Text>
+                <Text style={styles.nozzleCell}>{n.sizeNps}</Text>
+                <Text style={styles.nozzleCell}>{n.rating}</Text>
+                <Text style={styles.nozzleCellQty}>{n.quantity}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Full Accessories */}
+        <View style={styles.section}>
+          <Text style={styles.sectionHead}>Accessories &amp; Configuration</Text>
+          <View style={styles.sectionRule} />
+          {data.accessories.detail.length > 0 ? (
+            (() => {
+              const groups = new Map<string, typeof data.accessories.detail>();
+              for (const row of data.accessories.detail) {
+                const list = groups.get(row.group) ?? [];
+                list.push(row);
+                groups.set(row.group, list);
+              }
+              return Array.from(groups.entries()).map(([group, rows]) => (
+                <View key={group} style={{ marginBottom: 8 }}>
+                  <Text style={styles.accessoryGroup}>{group}</Text>
+                  {rows.map((r, i) => (
+                    <View key={i} style={styles.kvRowLine}>
+                      <Text style={styles.kvLabelInline}>{r.label}</Text>
+                      <Text style={styles.kvValueInline}>{r.value}</Text>
+                    </View>
+                  ))}
+                </View>
+              ));
+            })()
+          ) : (
+            <Text style={[styles.para, { color: C.muted }]}>No additional accessories specified.</Text>
+          )}
+        </View>
+
+        {/* Pricing — single bottom-line total only */}
         <View style={styles.section}>
           <Text style={styles.sectionHead}>Investment</Text>
           <View style={styles.sectionRule} />
           <View style={styles.priceCard}>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>
-                {data.pricing.quantity > 1
-                  ? 'Per vessel — materials, fabrication & quality plan'
-                  : 'Vessel — materials, fabrication & quality plan'}
-              </Text>
-              <Text style={styles.priceValue}>{data.pricing.unitPrice}</Text>
-            </View>
-            {data.pricing.quantity > 1 && (
-              <View style={styles.priceRow}>
-                <Text style={styles.priceLabel}>
-                  Vessels (× {data.pricing.quantity})
-                </Text>
-                <Text style={styles.priceValue}>{data.pricing.lineExtended}</Text>
-              </View>
-            )}
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Freight allowance (F.O.B. Fairfield)</Text>
-              <Text style={styles.priceValue}>{data.pricing.freight}</Text>
-            </View>
             <View style={styles.priceTotalRow}>
-              <Text style={styles.priceTotalLabel}>Total delivered</Text>
+              <Text style={styles.priceTotalLabel}>
+                {data.pricing.quantity > 1
+                  ? `Total delivered (${data.pricing.quantity} vessels, F.O.B. Fairfield)`
+                  : 'Total delivered (F.O.B. Fairfield)'}
+              </Text>
               <Text style={styles.priceTotalValue}>{data.pricing.totalDelivered}</Text>
             </View>
           </View>

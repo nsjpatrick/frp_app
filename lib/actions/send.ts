@@ -152,6 +152,24 @@ export async function saveRecipientForQuote(formData: FormData): Promise<void> {
     });
   }
 
+  // Flip DRAFT → SENT on completion. Quotes already advanced past SENT
+  // (Engineering / Fabricating / Won / Shipped / Lost) keep their
+  // current state — Complete-and-Save is also used to redownload the
+  // PDF after later edits, and we don't want to walk the deal back.
+  if (quote.status === 'DRAFT') {
+    await db.quote.update({
+      where: { id: quoteId },
+      data: { status: 'SENT' },
+    });
+    await writeAuditEntry(db, {
+      entityType: 'Quote',
+      entityId: quoteId,
+      actorUserId: user.id,
+      action: 'status:update',
+      diffJson: { from: 'DRAFT', to: 'SENT', via: 'complete-and-save' },
+    });
+  }
+
   // If we're keeping the existing project, allow in-place edits to its
   // name / site / description — matches prior behavior for already-linked
   // quotes.
@@ -177,4 +195,8 @@ export async function saveRecipientForQuote(formData: FormData): Promise<void> {
 
   revalidatePath(`/customers/${customerId}`);
   revalidatePath(`/quotes/${quoteId}`);
+  // Refresh the queue + dashboard so the new SENT status (and any totalPrice
+  // change) lands the next time the rep hits the list view.
+  revalidatePath('/quotes');
+  revalidatePath('/dashboard');
 }

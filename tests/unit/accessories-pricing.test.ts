@@ -20,7 +20,7 @@ const baseInputs: PricingInputs = {
   geometry: { ...baseGeom, accessories: accessoriesSchema.parse({}) },
   service: { postCure: false, specificGravity: 1.0, operatingPressurePsig: 0 },
   certs: { asmeRtp1Class: null, nsfAnsi61Required: false, nsfAnsi2Required: false, thirdPartyInspector: 'NONE' },
-  wallBuildup: { resinId: 'derakane-signia-411' },
+  wallBuildup: { resinId: 'derakane-411-350' },
 };
 
 function withAcc(patch: Partial<ReturnType<typeof accessoriesSchema.parse>>) {
@@ -115,14 +115,16 @@ describe('Tank-type defaults', () => {
   it('bryneer defaults set NSF 61, Hetron 922, SmartBob AO, Bryneer pkg', () => {
     const d = getDefaultsForTankType('bryneer');
     expect(d.certs.nsfAnsi61Required).toBe(true);
-    expect(d.wallBuildup.resinId).toBe('hetron-922');
+    expect(d.wallBuildup.resinId).toBe('derakane-411-350');
     expect(d.accessories.smartBob).toBe('binmaster_ao');
     expect(d.accessories.bryneerPackage.enabled).toBe(true);
     expect(d.service.specificGravity).toBe(1.20);
   });
 
-  it('mixing tank defaults turn on baffles + agitator support', () => {
-    const d = getDefaultsForTankType('mixing_tank');
+  it('process vessel defaults turn on baffles + agitator support', () => {
+    // `mixing_tank` was folded into `process_vessel` when the type list
+    // was pared down to the jobcalc-derivable set.
+    const d = getDefaultsForTankType('process_vessel');
     expect(d.geometry.baffles).toBe(true);
     expect(d.geometry.baffleCount).toBe(4);
     expect(d.accessories.agitatorSupport.enabled).toBe(true);
@@ -136,7 +138,7 @@ describe('Tank-type defaults', () => {
 
   it('falls back to FRP vessel when id is unknown', () => {
     const d = getDefaultsForTankType('not_a_real_id');
-    expect(d.wallBuildup.resinId).toBe('derakane-signia-411');
+    expect(d.wallBuildup.resinId).toBe('derakane-411-350');
   });
 
   it('a Bryneer-configured vessel prices significantly above a bare tank', () => {
@@ -151,7 +153,7 @@ describe('Tank-type defaults', () => {
         nozzles: getDefaultsForTankType('bryneer').geometry.nozzles,
       },
       service: { ...baseInputs.service, specificGravity: 1.20 },
-      wallBuildup: { resinId: 'hetron-922' },
+      wallBuildup: { resinId: 'derakane-411-350' },
       certs: { ...baseInputs.certs, nsfAnsi61Required: true },
     });
     // Bryneer config bundles SmartBob + salt pipe + ladder + handrail + lugs

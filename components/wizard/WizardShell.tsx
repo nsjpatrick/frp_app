@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { db } from '@/lib/db';
 import { LiveSummary } from './LiveSummary';
+import { ClearAllFieldsButton } from './ClearAllFieldsButton';
 import {
   computeStepCompleteness,
   type StepPath,
@@ -8,10 +9,10 @@ import {
 import { getDefaultsForTankType } from '@/lib/catalog/tank-type-defaults';
 
 const STEPS: Array<{ n: number; label: string; path: StepPath }> = [
-  { n: 1, label: 'Service & Certifications', path: 'step-1' },
-  { n: 2, label: 'Geometry',                 path: 'step-2' },
-  { n: 3, label: 'Review & Generate',        path: 'review' },
-  { n: 4, label: 'Customer & Project',       path: 'send' },
+  { n: 1, label: 'Specs & Service',  path: 'step-1' },
+  { n: 2, label: 'Fittings',         path: 'step-2' },
+  { n: 3, label: 'Review',           path: 'review' },
+  { n: 4, label: 'Send',             path: 'send' },
 ];
 
 /**
@@ -40,17 +41,22 @@ function stateFor(
 }
 
 /**
- * WizardShell — 3-column configurator layout.
+ * WizardShell — horizontal stepper on top, configurator + LiveSummary below.
  *
- * Vertical sizing: rails (left + right) use `self-start` so each column hugs
- * its own content; the CENTER column has `max-height: calc(100vh - 9rem)` +
- * `overflow-y-auto`, so when page content is short everything stays compact,
- * and when the form is long only the middle scrolls while the rails stay
- * visible above the fold.
+ * Layout:
+ *   ┌──────────────────────────────────────────────────────────┐
+ *   │ [Quote · Rev]   [1] ── [2] ── [3] ── [4]                 │  top stepper
+ *   ├──────────────────────────────────────────┬───────────────┤
+ *   │  Configurator (spans available width)    │  LiveSummary  │
+ *   └──────────────────────────────────────────┴───────────────┘
  *
- * Top alignment: all three columns use the same `pt-6 md:pt-8` so their
- * first visible row (left = "Quote · Rev" eyebrow, middle = step page
- * header, right = live-summary eyebrow) sits at the same Y.
+ * The configurator no longer competes with a 260px left rail, so it gets
+ * ~260px more horizontal real estate — the existing responsive grids
+ * inside each form section reflow naturally to use the room. The
+ * LiveSummary rail keeps its 300px column on the right.
+ *
+ * Top alignment: stepper sits above both columns, so the configurator
+ * and LiveSummary both start at the same Y just below the bar.
  */
 export async function WizardShell({
   quoteId,
@@ -108,14 +114,36 @@ export async function WizardShell({
     : { 'step-1': false, 'step-2': false, review: false, send: false };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)_300px] gap-5 mt-6 items-start">
-      {/* Left — step nav. Natural height; hugs its content. */}
-      <aside className="glass px-3 pt-6 md:pt-8 pb-4">
-        <div className="px-2 pb-3 text-[10px] font-semibold tracking-[0.12em] uppercase text-slate-500">
+    // The step bar gets equal breathing room above (24px from the
+    // `<main>` element's pt-6) and below (24px gap before the
+    // configurator). No top-margin on the wizard wrapper itself so the
+    // two distances stay symmetric.
+    //
+    // `h-[calc(100dvh-8rem)]` pins the whole wizard to the viewport so
+    // the page itself never scrolls — the step bar stays fixed at the
+    // top, and the configurator + LiveSummary handle their own internal
+    // scroll when content exceeds the available column height. 8rem
+    // accounts for the sticky nav (~64px) + main's py-6 padding (48px)
+    // + a small buffer. `dvh` (dynamic viewport height) tracks mobile
+    // browser chrome correctly; `vh` is the fallback.
+    <div className="flex flex-col gap-6 h-[calc(100vh-8rem)] [@supports(height:100dvh)]:h-[calc(100dvh-8rem)] min-h-0">
+      {/* Top — horizontal step tracker.
+          The pills sit absolutely centered against the bar; the eyebrow
+          and Clear-all action are absolutely positioned at the left and
+          right edges so neither one's width pushes the pills off-center.
+          On narrow screens the bar collapses to a stack. */}
+      <nav
+        aria-label="Wizard steps"
+        className="glass px-4 md:px-5 py-3 flex flex-col gap-3 md:relative md:flex-row md:items-center md:justify-center md:min-h-[3.25rem]"
+      >
+        <div className="text-[10px] font-semibold tracking-[0.12em] uppercase text-slate-500 whitespace-nowrap md:absolute md:left-5 md:top-1/2 md:-translate-y-1/2 shrink-0">
           Quote {quoteId.slice(0, 6)} · Rev {revLabel}
         </div>
-        <nav className="space-y-1">
-          {STEPS.map((s) => {
+        {/* Pills + connector lines. The lines are pseudo-elements on each
+            pill (except the first) so they shorten / hide automatically on
+            narrow screens where the row wraps. */}
+        <ol className="flex flex-wrap items-center justify-center gap-y-2">
+          {STEPS.map((s, idx) => {
             const state = stateFor(current as StepPath, s.path, completeness);
             const isLocked = state === 'locked';
             const stateClass =
@@ -125,55 +153,70 @@ export async function WizardShell({
               : 'locked';
             const href = `/quotes/${quoteId}/rev/${revLabel}/${s.path}`;
             const pillClass = `step-pill ${stateClass} ${isLocked ? 'pointer-events-none opacity-50 cursor-not-allowed' : ''}`;
-            // Locked upcoming steps render as a non-link <span> so they're
-            // also keyboard-inert and won't even be considered for nav even
-            // if someone forces a click through dev tools. Server action on
-            // the step page then redirects to the earliest incomplete step,
-            // so URL manipulation can't bypass the gate either.
-            if (isLocked) {
-              return (
-                <span
-                  key={s.path}
-                  role="link"
-                  aria-disabled
-                  tabIndex={-1}
-                  title="Finish the previous step first"
-                  className={pillClass}
-                >
-                  <span className="step-num">{s.n}</span>
-                  <span className="flex-1">{s.label}</span>
-                </span>
-              );
-            }
-            return (
-              <Link key={s.path} href={href} className={pillClass}>
+            const inner = (
+              <>
                 <span className="step-num">
                   {state === 'completed' ? '✓' : s.n}
                 </span>
-                <span className="flex-1">{s.label}</span>
-              </Link>
+                <span className="whitespace-nowrap">{s.label}</span>
+              </>
+            );
+            return (
+              <li key={s.path} className="flex items-center min-w-0">
+                {idx > 0 && (
+                  <span
+                    aria-hidden
+                    className="hidden md:block w-6 lg:w-10 h-px bg-slate-300/80 mx-1"
+                  />
+                )}
+                {isLocked ? (
+                  <span
+                    role="link"
+                    aria-disabled
+                    tabIndex={-1}
+                    title="Finish the previous step first"
+                    className={pillClass}
+                  >
+                    {inner}
+                  </span>
+                ) : (
+                  <Link href={href} className={pillClass}>
+                    {inner}
+                  </Link>
+                )}
+              </li>
             );
           })}
-        </nav>
-      </aside>
+        </ol>
 
-      {/* Center — the only column that can scroll internally. Max-height
-          keeps it within the viewport so page-level scroll never engages
-          while the rails stay in place. */}
-      <section
-        className="glass-raised px-8 md:px-10 pt-6 md:pt-8 pb-6 md:pb-8 overflow-y-auto min-h-0"
-        style={{ maxHeight: 'calc(100vh - 9rem)' }}
-      >
-        {children}
-      </section>
+        {/* Right-edge Reset-all action — absolute-positioned at md+ so
+            the pills above stay truly centered against the bar. Restores
+            FRP Vessel defaults across every step (server-side wipe of
+            the revision), then navigates the rep back to Step 1. */}
+        <div className="shrink-0 md:absolute md:right-5 md:top-1/2 md:-translate-y-1/2">
+          <ClearAllFieldsButton quoteId={quoteId} revLabel={revLabel} />
+        </div>
+      </nav>
 
-      {/* Right — live summary. Natural height; hugs its content. */}
-      <aside className="glass px-5 pt-6 md:pt-8 pb-5">
-        {summary ?? (pricingInputs
-          ? <LiveSummary inputs={pricingInputs} />
-          : <LiveSummary inputs={{ geometry: {}, service: {}, certs: {}, wallBuildup: {} }} />
-        )}
-      </aside>
+      {/* Below — configurator + live summary, sharing the remaining
+          vertical space. Each column scrolls internally; `min-h-0` on
+          the row + each column lets flex/grid actually shrink them so
+          their `overflow-y-auto` can engage instead of pushing the
+          page taller. The pricing rail uses `items-start` + `max-h-full`
+          so it hugs its content vertically — and only starts scrolling
+          if the breakdown ever exceeds the available height. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-5 flex-1 min-h-0 items-start lg:h-full">
+        <section className="glass-raised px-6 md:px-10 pt-6 md:pt-8 pb-6 md:pb-8 overflow-y-auto min-h-0 h-full w-full">
+          {children}
+        </section>
+
+        <aside className="glass px-5 pt-6 md:pt-8 pb-5 overflow-y-auto min-h-0 max-h-full w-full">
+          {summary ?? (pricingInputs
+            ? <LiveSummary inputs={pricingInputs} />
+            : <LiveSummary inputs={{ geometry: {}, service: {}, certs: {}, wallBuildup: {} }} />
+          )}
+        </aside>
+      </div>
     </div>
   );
 }

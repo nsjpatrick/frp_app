@@ -24,26 +24,34 @@ const numStr = (n: number | null | undefined): string =>
 // Countries supported by Zippopotam.us that cover most real-world quotes.
 // US sits first / default because ASCE 7-22 seismic values only cover
 // US territory — non-US lookups will geocode but USGS returns nothing.
-const COUNTRIES: Array<{ code: string; label: string }> = [
-  { code: 'US', label: 'United States' },
-  { code: 'CA', label: 'Canada' },
-  { code: 'MX', label: 'Mexico' },
-  { code: 'GB', label: 'United Kingdom' },
-  { code: 'DE', label: 'Germany' },
-  { code: 'FR', label: 'France' },
-  { code: 'IT', label: 'Italy' },
-  { code: 'ES', label: 'Spain' },
-  { code: 'NL', label: 'Netherlands' },
-  { code: 'BE', label: 'Belgium' },
-  { code: 'SE', label: 'Sweden' },
-  { code: 'NO', label: 'Norway' },
-  { code: 'DK', label: 'Denmark' },
-  { code: 'FI', label: 'Finland' },
-  { code: 'JP', label: 'Japan' },
-  { code: 'AU', label: 'Australia' },
-  { code: 'NZ', label: 'New Zealand' },
-  { code: 'BR', label: 'Brazil' },
-  { code: 'PR', label: 'Puerto Rico' },
+// `placeholder` shows the canonical native format so reps know what to
+// type even when no auto-fill exists.
+const COUNTRIES: Array<{ code: string; label: string; placeholder: string }> = [
+  { code: 'US', label: 'United States',  placeholder: '45014' },
+  { code: 'CA', label: 'Canada',          placeholder: 'M5V 3A8' },
+  { code: 'MX', label: 'Mexico',          placeholder: '06600' },
+  { code: 'GB', label: 'United Kingdom',  placeholder: 'SW1A 1AA' },
+  { code: 'IE', label: 'Ireland',         placeholder: 'D02 X285' },
+  { code: 'DE', label: 'Germany',         placeholder: '10115' },
+  { code: 'FR', label: 'France',          placeholder: '75001' },
+  { code: 'IT', label: 'Italy',           placeholder: '00100' },
+  { code: 'ES', label: 'Spain',           placeholder: '28001' },
+  { code: 'PT', label: 'Portugal',        placeholder: '1000-001' },
+  { code: 'NL', label: 'Netherlands',     placeholder: '1011 AB' },
+  { code: 'BE', label: 'Belgium',         placeholder: '1000' },
+  { code: 'CH', label: 'Switzerland',     placeholder: '8001' },
+  { code: 'AT', label: 'Austria',         placeholder: '1010' },
+  { code: 'PL', label: 'Poland',          placeholder: '00-001' },
+  { code: 'SE', label: 'Sweden',          placeholder: '111 20' },
+  { code: 'NO', label: 'Norway',          placeholder: '0010' },
+  { code: 'DK', label: 'Denmark',         placeholder: '1050' },
+  { code: 'FI', label: 'Finland',         placeholder: '00100' },
+  { code: 'JP', label: 'Japan',           placeholder: '100-0001' },
+  { code: 'AU', label: 'Australia',       placeholder: '2000' },
+  { code: 'NZ', label: 'New Zealand',     placeholder: '6011' },
+  { code: 'BR', label: 'Brazil',          placeholder: '01000-000' },
+  { code: 'IN', label: 'India',           placeholder: '110001' },
+  { code: 'PR', label: 'Puerto Rico',     placeholder: '00901' },
 ];
 
 export function SiteLookupSection({
@@ -124,7 +132,7 @@ export function SiteLookupSection({
               value={postal}
               onChange={(e) => setPostal(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleLookup(); } }}
-              placeholder={country === 'US' ? '45014' : country === 'GB' ? 'SW1A 1AA' : country === 'CA' ? 'M5V 3A8' : 'Postal code'}
+              placeholder={COUNTRIES.find((c) => c.code === country)?.placeholder ?? 'Postal code'}
               className="glass-input font-mono tabular-nums"
               autoComplete="postal-code"
             />
